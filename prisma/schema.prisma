@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  SENT
+  ACKNOWLEDGED
+  EXPIRED
+}
+
+enum CommunicationProvider {
+  OUTLOOK
+  GMAIL
+  WHATSAPP
+}
+
+enum CommunicationType {
+  SUMMARY
+  DRAFT
+  SEND
+}
+
+enum CommunicationStatus {
+  DRAFT
+  AWAITING_APPROVAL
+  SENT
+  CANCELLED
+  DRY_RUN
+}
+
+enum OAuthProvider {
+  MICROSOFT
+  GOOGLE
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  title          String
+  description    String?
+  category       String
+  priority       Priority   @default(MEDIUM)
+  tags           Json       @default("[]")
+  status         TaskStatus @default(PENDING)
+  due_at         DateTime?
+  source_channel String?
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+  reminders      Reminder[]
+
+  @@index([status, due_at])
+  @@index([category])
+}
+
+model Reminder {
+  id         String         @id @default(uuid())
+  task_id    String?
+  event_id   String?
+  remind_at  DateTime
+  channel    String
+  status     ReminderStatus @default(SCHEDULED)
+  created_at DateTime       @default(now())
+  task       Task?          @relation(fields: [task_id], references: [id], onDelete: SetNull)
+
+  @@index([remind_at, status])
+}
+
+model DailyPlan {
+  id         String   @id @default(uuid())
+  date       String   @unique
+  items      Json     @default("[]")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model UserProfile {
+  id                String   @id @default(uuid())
+  timezone          String   @default("America/Sao_Paulo")
+  quiet_hours_start String   @default("22:00")
+  quiet_hours_end   String   @default("07:00")
+  proactivity_level Int      @default(3)
+  daily_nudge_limit Int      @default(5)
+  explicit_prefs    Json     @default("{}")
+  inferred_prefs    Json     @default("{}")
+  confidence        Json     @default("{}")
+  updated_at        DateTime @updatedAt
+}
+
+model Communication {
+  id         String                @id @default(uuid())
+  provider   CommunicationProvider
+  type       CommunicationType
+  thread_id  String?
+  to         String?
+  subject    String?
+  body       String?
+  status     CommunicationStatus   @default(DRAFT)
+  metadata   Json                  @default("{}")
+  created_at DateTime              @default(now())
+  approved_at DateTime?
+}
+
+model OAuthToken {
+  id                   String        @id @default(uuid())
+  provider             OAuthProvider @unique
+  encrypted_token_blob String
+  scopes               String[]
+  expires_at           DateTime?
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  ts          DateTime @default(now())
+  actor       String
+  action      String
+  entity_type String
+  entity_id   String?
+  summary     String
+  metadata    Json     @default("{}")
+
+  @@index([ts])
+  @@index([entity_type, entity_id])
+}

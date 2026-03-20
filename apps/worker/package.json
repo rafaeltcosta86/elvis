@@ -1,0 +1,32 @@
+{
+  "name": "worker",
+  "version": "0.0.1",
+  "private": true,
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "ioredis": "^5.3.2",
+    "bullmq": "^5.0.0",
+    "@prisma/client": "5.22.0",
+    "date-fns": "^2.30.0",
+    "date-fns-tz": "^2.0.0",
+    "axios": "^1.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "ts-node": "^10.9.2",
+    "prisma": "5.22.0",
+    "vitest": "^2.1.0",
+    "@vitest/coverage-v8": "^2.1.0"
+  },
+  "prisma": {
+    "schema": "../../prisma/schema.prisma"
+  }
+}
