@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE="docker compose -f $PROJECT_ROOT/docker-compose.prod.yml"
+COMPOSE="docker compose -f $PROJECT_ROOT/docker-compose.prod.yml --env-file $PROJECT_ROOT/.env.prod"
 
 SKIP_BUILD=false
 for arg in "$@"; do
