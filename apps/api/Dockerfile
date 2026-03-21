@@ -13,6 +13,8 @@ RUN pnpm install --frozen-lockfile
 
 RUN cd /app/apps/api && node_modules/.bin/prisma generate
 
+RUN pnpm --filter @elvis/shared build
+
 WORKDIR /app/apps/api
 
 RUN pnpm build
