@@ -1,1 +1,1 @@
-// Base types (to be populated)
+export * from './whatsapp';

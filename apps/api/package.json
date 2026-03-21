@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@elvis/shared": "workspace:*",
     "@prisma/client": "5.22.0",
     "axios": "^1.6.5",
     "bullmq": "^5.0.0",

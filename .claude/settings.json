@@ -4,5 +4,11 @@
   },
   "permissions": {
     "defaultMode": "bypassPermissions"
-  }
+  },
+  "allow": [
+    "Bash(*)",
+    "Bash(cd *)",
+    "Bash(find *)",
+    "Bash(git status *)"
+  ]
 }
