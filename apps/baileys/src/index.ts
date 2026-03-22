@@ -68,7 +68,8 @@ async function connect(): Promise<void> {
       const remoteJid = msg.key.remoteJid ?? '';
       const fromMe = msg.key.fromMe ?? false;
       const ownerJid = `${OWNER_PHONE}@s.whatsapp.net`;
-      console.log(`[DEBUG] type=${type} fromMe=${fromMe} jid=${remoteJid} ownerJid=${ownerJid} hasMsg=${!!msg.message}`);
+      const participant = msg.key.participant ?? '';
+      console.log(`[DEBUG] type=${type} fromMe=${fromMe} jid=${remoteJid} participant=${participant} ownerJid=${ownerJid} hasMsg=${!!msg.message}`);
     }
 
     if (type !== 'notify') return;
