@@ -135,7 +135,14 @@ app.post('/send', async (req, res) => {
     return;
   }
   try {
-    const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    // @lid JIDs cannot be used for sending from companion device.
+    // For self-chat, always send to OWNER_PHONE@s.whatsapp.net.
+    let jid: string;
+    if (to.endsWith('@lid')) {
+      jid = `${OWNER_PHONE}@s.whatsapp.net`;
+    } else {
+      jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    }
     await sock.sendMessage(jid, { text });
     res.json({ ok: true });
   } catch (err) {
