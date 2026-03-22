@@ -80,11 +80,13 @@ async function connect(): Promise<void> {
       const fromMe = msg.key.fromMe ?? false;
       const ownerJid = `${OWNER_PHONE}@s.whatsapp.net`;
 
-      // Accept: self-chat (fromMe=true) OR command group (fromMe=true)
+      // Accept: self-chat (fromMe=true) OR command group (owner is sender)
       const selfChatJid = process.env.SELF_CHAT_JID ?? ownerJid;
       const commandGroupJid = process.env.COMMAND_GROUP_JID ?? '';
+      const participant = msg.key.participant ?? '';
+      const isOwnerSender = fromMe || participant.startsWith(OWNER_PHONE);
       const isSelfChat = fromMe && remoteJid === selfChatJid;
-      const isCommandGroup = fromMe && !!commandGroupJid && remoteJid === commandGroupJid;
+      const isCommandGroup = !!commandGroupJid && remoteJid === commandGroupJid && isOwnerSender;
       if (!isSelfChat && !isCommandGroup) continue;
 
       const text =
