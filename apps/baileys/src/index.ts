@@ -64,6 +64,13 @@ async function connect(): Promise<void> {
 
   // ── Incoming messages ──────────────────────────────────────────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    for (const msg of messages) {
+      const remoteJid = msg.key.remoteJid ?? '';
+      const fromMe = msg.key.fromMe ?? false;
+      const ownerJid = `${OWNER_PHONE}@s.whatsapp.net`;
+      console.log(`[DEBUG] type=${type} fromMe=${fromMe} jid=${remoteJid} ownerJid=${ownerJid} hasMsg=${!!msg.message}`);
+    }
+
     if (type !== 'notify') return;
 
     for (const msg of messages) {
