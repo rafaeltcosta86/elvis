@@ -8,6 +8,7 @@ export type Intent =
   | 'MORE_PROACTIVE'
   | 'LESS_PROACTIVE'
   | 'RESET_PREFS'
+  | 'SEND_TO'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -16,6 +17,8 @@ export interface ParsedCommand {
     rawText?: string;
     taskId?: string;
     to?: string;
+    contactName?: string;
+    message?: string;
   };
 }
 
@@ -71,6 +74,18 @@ export function parseCommand(text: string): ParsedCommand {
   // /corrigir
   if (/^\/corrigir$/i.test(trimmed)) {
     return { intent: 'RESET_PREFS' };
+  }
+
+  // manda para <nome>: <msg> | fala com <nome> que <msg> | avisa <nome>: <msg>
+  const sendToMatch = /^(?:manda(?:r)? (?:para|pro|pra)|fala com|avisa) (.+?)(?::|,| que | dizendo ) (.+)$/i.exec(trimmed);
+  if (sendToMatch) {
+    return {
+      intent: 'SEND_TO',
+      args: {
+        contactName: sendToMatch[1].trim(),
+        message: sendToMatch[2].trim(),
+      },
+    };
   }
 
   // Anything else is CREATE_TASK

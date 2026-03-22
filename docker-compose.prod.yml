@@ -70,9 +70,27 @@ services:
     networks:
       - elvis_prod
 
+  baileys:
+    build:
+      context: .
+      dockerfile: ./apps/baileys/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - NODE_ENV=production
+      - ELVIS_API_URL=http://api:3000
+    volumes:
+      - baileys_auth:/data/auth
+    depends_on:
+      - api
+    networks:
+      - elvis_prod
+
 volumes:
   postgres_data_prod:
   redis_data_prod:
+  baileys_auth:
 
 networks:
   elvis_prod:

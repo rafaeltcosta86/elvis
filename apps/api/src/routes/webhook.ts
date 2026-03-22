@@ -11,38 +11,36 @@ import { getOrCreateProfile } from '../lib/userModel';
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
 
-// Validate Bearer token
-function validateToken(authHeader?: string): boolean {
+// Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
+function parseContacts(raw: string): Array<{ name: string; phone: string }> {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [name, phone] = entry.split(':');
+      return { name: (name ?? '').trim(), phone: (phone ?? '').trim() };
+    })
+    .filter((c) => c.name && c.phone);
+}
+
+// Validate Bearer token against a given secret
+function validateToken(authHeader: string | undefined, secret: string): boolean {
   if (!authHeader) return false;
   const [type, token] = authHeader.split(' ');
   if (type !== 'Bearer') return false;
-  return token === process.env.WEBHOOK_SECRET;
+  return token === secret;
 }
 
-router.post('/webhook/nanoclaw', async (req, res) => {
-  try {
-    // 1. Validate token
-    const authHeader = req.headers.authorization;
-    if (!validateToken(authHeader)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+// Core handler — shared by all webhook providers
+async function handleIncomingWhatsApp(
+  sender_id: string,
+  message_text: string
+): Promise<string> {
+  const { intent, args } = parseCommand(message_text);
+  let responseText = '';
 
-    // 2. Parse request body
-    const { sender_id, message_text, message_id, timestamp } = req.body;
-
-    if (!sender_id || !message_text) {
-      // Still return 200 to NanoClaw
-      console.error('Invalid webhook payload');
-      return res.json({ ok: true });
-    }
-
-    // 3. Parse command
-    const { intent, args } = parseCommand(message_text);
-
-    let responseText = '';
-
-    // 4. Route by intent
-    switch (intent) {
+  switch (intent) {
       case 'TODAY': {
         const today = utcToZonedTime(new Date(), TIMEZONE);
         const todayDate = new Date(
@@ -190,21 +188,62 @@ router.post('/webhook/nanoclaw', async (req, res) => {
         break;
       }
 
+      case 'SEND_TO': {
+        const contacts = parseContacts(process.env.WHATSAPP_CONTACTS ?? '');
+        const contact = contacts.find(
+          (c) => c.name.toLowerCase() === (args?.contactName ?? '').toLowerCase()
+        );
+        if (!contact) {
+          responseText = `❌ "${args?.contactName}" não encontrado. Adicione em WHATSAPP_CONTACTS=nome:numero`;
+          break;
+        }
+        await sendWhatsApp(contact.phone, args?.message ?? '');
+        responseText = `✉️ Mensagem enviada para ${contact.name}`;
+        break;
+      }
+
       case 'UNKNOWN': {
         responseText =
-          'Não entendi. Comandos:\n/hoje — resumo\n/done <id> — pronto\n/adiar <id> tomorrow — adiar\n/semana — semana\n/email — e-mails';
+          'Não entendi. Comandos:\n/hoje — resumo\n/done <id> — pronto\n/adiar <id> tomorrow — adiar\n/semana — semana\n/email — e-mails\nmanda para <nome>: <msg>';
         break;
       }
     }
 
-    // 5. Send response via NanoClaw
-    await sendWhatsApp(sender_id, responseText);
+  return responseText;
+}
 
-    // 6. Always return 200 to NanoClaw
+// ── NanoClaw webhook ────────────────────────────────────────────────────────
+router.post('/webhook/nanoclaw', async (req, res) => {
+  try {
+    if (!validateToken(req.headers.authorization, process.env.WEBHOOK_SECRET ?? '')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { sender_id, message_text } = req.body;
+    if (!sender_id || !message_text) return res.json({ ok: true });
+
+    const responseText = await handleIncomingWhatsApp(sender_id, message_text);
+    await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Webhook error:', err);
-    // Still return 200 to avoid redelivery
+    console.error('Webhook nanoclaw error:', err);
+    res.json({ ok: true });
+  }
+});
+
+// ── Baileys webhook (internal — called by apps/baileys service) ─────────────
+router.post('/webhook/baileys', async (req, res) => {
+  try {
+    if (!validateToken(req.headers.authorization, process.env.BAILEYS_WEBHOOK_SECRET ?? '')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { sender_id, message_text } = req.body;
+    if (!sender_id || !message_text) return res.json({ ok: true });
+
+    const responseText = await handleIncomingWhatsApp(sender_id, message_text);
+    await sendWhatsApp(sender_id, responseText);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Webhook baileys error:', err);
     res.json({ ok: true });
   }
 });

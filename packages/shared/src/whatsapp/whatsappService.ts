@@ -1,6 +1,7 @@
 import type { WhatsAppAdapter } from './types';
 import { MockAdapter } from './adapters/mockAdapter';
 import { NanoclawAdapter } from './adapters/nanoclawAdapter';
+import { BaileysAdapter } from './adapters/baileysAdapter';
 
 export interface RateLimitStore {
   increment(key: string, ttlSeconds: number): Promise<number>;
@@ -52,6 +53,9 @@ export function createWhatsAppService(store?: RateLimitStore): WhatsAppService {
         return new MockAdapter();
       }
       return new NanoclawAdapter(apiUrl, apiKey);
+    }
+    if (provider === 'baileys') {
+      return new BaileysAdapter();
     }
     return new MockAdapter();
   }
