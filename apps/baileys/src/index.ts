@@ -85,7 +85,7 @@ async function connect(): Promise<void> {
       const selfChatJid = process.env.SELF_CHAT_JID ?? ownerJid;
       const commandGroupJid = process.env.COMMAND_GROUP_JID ?? '';
       const participant = msg.key.participant ?? '';
-      const isOwnerSender = fromMe || participant.startsWith(OWNER_PHONE);
+      const isOwnerSender = fromMe || participant.startsWith(OWNER_PHONE) || participant === selfChatJid;
       const isSelfChat = fromMe && remoteJid === selfChatJid;
       const isCommandGroup = !!commandGroupJid && remoteJid === commandGroupJid && isOwnerSender;
       if (!isSelfChat && !isCommandGroup) continue;
