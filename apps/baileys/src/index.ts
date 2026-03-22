@@ -7,7 +7,6 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import axios from 'axios';
 import express from 'express';
-import { Boom } from '@hapi/boom';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const OWNER_PHONE = process.env.OWNER_PHONE ?? '';
@@ -52,7 +51,7 @@ async function connect(): Promise<void> {
 
     if (connection === 'close') {
       connected = false;
-      const status = (lastDisconnect?.error as Boom)?.output?.statusCode;
+      const status = (lastDisconnect?.error as any)?.output?.statusCode;
       const shouldReconnect = status !== DisconnectReason.loggedOut;
       console.log(`[Baileys] Conexão encerrada (status=${status}). Reconectar: ${shouldReconnect}`);
       if (shouldReconnect) {
