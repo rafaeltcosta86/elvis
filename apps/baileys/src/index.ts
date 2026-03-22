@@ -135,13 +135,7 @@ app.post('/send', async (req, res) => {
     return;
   }
   try {
-    // @lid = self-chat linked identity — must send to own JID instead
-    let jid: string;
-    if (to.endsWith('@lid')) {
-      jid = sock.user?.id ?? `${OWNER_PHONE}@s.whatsapp.net`;
-    } else {
-      jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-    }
+    const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
     await sock.sendMessage(jid, { text });
     res.json({ ok: true });
   } catch (err) {
