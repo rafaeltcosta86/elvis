@@ -88,6 +88,7 @@ async function connect(): Promise<void> {
       const isOwnerSender = fromMe || participant.startsWith(OWNER_PHONE) || participant === selfChatJid;
       const isSelfChat = fromMe && remoteJid === selfChatJid;
       const isCommandGroup = !!commandGroupJid && remoteJid === commandGroupJid && isOwnerSender;
+      console.log(`[FILTER] isSelf=${isSelfChat} isGroup=${isCommandGroup} cmdJid="${commandGroupJid}" remoteJid="${remoteJid}" jidMatch=${remoteJid === commandGroupJid} isOwner=${isOwnerSender} participant="${participant}" selfChatJid="${selfChatJid}"`);
       if (!isSelfChat && !isCommandGroup) continue;
 
       const text =
