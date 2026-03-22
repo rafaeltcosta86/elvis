@@ -80,11 +80,12 @@ async function connect(): Promise<void> {
       const fromMe = msg.key.fromMe ?? false;
       const ownerJid = `${OWNER_PHONE}@s.whatsapp.net`;
 
-      // Fase 1: only process self-chat — must match exact JID
-      // Use SELF_CHAT_JID env var (set after seeing DEBUG logs) or fallback to @s.whatsapp.net
+      // Accept: self-chat (fromMe=true) OR command group (fromMe=true)
       const selfChatJid = process.env.SELF_CHAT_JID ?? ownerJid;
+      const commandGroupJid = process.env.COMMAND_GROUP_JID ?? '';
       const isSelfChat = fromMe && remoteJid === selfChatJid;
-      if (!isSelfChat) continue;
+      const isCommandGroup = fromMe && !!commandGroupJid && remoteJid === commandGroupJid;
+      if (!isSelfChat && !isCommandGroup) continue;
 
       const text =
         msg.message.conversation ??
@@ -95,10 +96,12 @@ async function connect(): Promise<void> {
       console.log(`[Baileys] self-chat → "${text}"`);
 
       try {
+        // For groups, reply to the group JID. For self-chat @lid, reply to OWNER_PHONE.
+        const replyTo = remoteJid.endsWith('@g.us') ? remoteJid : OWNER_PHONE;
         await axios.post(
           `${ELVIS_API_URL}/webhook/baileys`,
           {
-            sender_id: remoteJid,  // use actual JID so reply goes back to same chat
+            sender_id: replyTo,
             message_text: text,
             message_id: msg.key.id ?? '',
             timestamp: msg.messageTimestamp ?? Math.floor(Date.now() / 1000),
@@ -135,8 +138,8 @@ app.post('/send', async (req, res) => {
     return;
   }
   try {
-    // @lid JIDs cannot be used for sending from companion device.
-    // For self-chat, always send to OWNER_PHONE@s.whatsapp.net.
+    // Groups (@g.us) and phone numbers work fine.
+    // @lid cannot be used for sending — fallback to OWNER_PHONE.
     let jid: string;
     if (to.endsWith('@lid')) {
       jid = `${OWNER_PHONE}@s.whatsapp.net`;
