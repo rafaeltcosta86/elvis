@@ -81,8 +81,8 @@ async function connect(): Promise<void> {
       const ownerJid = `${OWNER_PHONE}@s.whatsapp.net`;
 
       // Fase 1: only process self-chat messages sent BY the owner
-      // (fromMe=true + remoteJid=own number)
-      const isSelfChat = fromMe && remoteJid === ownerJid;
+      // remoteJid can be @s.whatsapp.net or @lid (linked identity device)
+      const isSelfChat = fromMe && (remoteJid === ownerJid || remoteJid.endsWith('@lid'));
       if (!isSelfChat) continue;
 
       const text =
