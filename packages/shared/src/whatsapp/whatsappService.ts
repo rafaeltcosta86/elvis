@@ -71,8 +71,9 @@ export function createWhatsAppService(store?: RateLimitStore): WhatsAppService {
           return;
         }
 
-        // Allowlist
-        if (!allowAll && !allowlist.has(to)) {
+        // Allowlist — also allow @lid JIDs (WhatsApp self-chat linked identity)
+        const isLid = to.endsWith('@lid');
+        if (!allowAll && !isLid && !allowlist.has(to)) {
           console.warn(`[WhatsApp] blocked: ${to} not in allowlist`);
           return;
         }

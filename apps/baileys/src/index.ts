@@ -97,7 +97,7 @@ async function connect(): Promise<void> {
         await axios.post(
           `${ELVIS_API_URL}/webhook/baileys`,
           {
-            sender_id: OWNER_PHONE,
+            sender_id: remoteJid,  // use actual JID so reply goes back to same chat
             message_text: text,
             message_id: msg.key.id ?? '',
             timestamp: msg.messageTimestamp ?? Math.floor(Date.now() / 1000),
