@@ -33,6 +33,7 @@ async function connect(): Promise<void> {
     printQRInTerminal: true,
     browser: ['Elvis', 'Chrome', '1.0.0'],
     syncFullHistory: false,
+    getMessage: async () => ({ conversation: '' }),
   });
 
   sock.ev.on('creds.update', saveCreds);
