@@ -150,7 +150,9 @@ app.post('/send', async (req, res) => {
     } else {
       jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
     }
+    console.log(`[Baileys] /send → jid="${jid}" text="${text.substring(0, 50)}"`);
     await sock.sendMessage(jid, { text });
+    console.log(`[Baileys] /send ✓ enviado para ${jid}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('[Baileys] Erro ao enviar:', err instanceof Error ? err.message : err);
