@@ -29,6 +29,7 @@ const AUTH_DIR = process.env.AUTH_DIR ?? '/data/auth';
 
 let sock: WASocket | null = null;
 let connected = false;
+let sessionReady = false; // true after WhatsApp finishes offline-notif sync
 let qrCode: string | null = null;
 let isFirstConnect = true;
 
@@ -85,7 +86,7 @@ async function connect(): Promise<void> {
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr, receivedPendingNotifications }) => {
     if (qr) {
       qrCode = qr;
       console.log('[Baileys] QR code gerado — escaneie com seu WhatsApp');
@@ -93,12 +94,19 @@ async function connect(): Promise<void> {
 
     if (connection === 'open') {
       connected = true;
+      sessionReady = false; // wait for receivedPendingNotifications
       qrCode = null;
-      console.log('[Baileys] Conectado ao WhatsApp');
+      console.log('[Baileys] Conectado ao WhatsApp — aguardando sync...');
+    }
+
+    if (receivedPendingNotifications) {
+      sessionReady = true;
+      console.log('[Baileys] Sessão sincronizada — pronto para enviar');
     }
 
     if (connection === 'close') {
       connected = false;
+      sessionReady = false;
       const status = (lastDisconnect?.error as any)?.output?.statusCode;
       const shouldReconnect = status !== DisconnectReason.loggedOut;
       console.log(`[Baileys] Conexão encerrada (status=${status}). Reconectar: ${shouldReconnect}`);
@@ -193,6 +201,16 @@ app.post('/send', async (req, res) => {
   if (!sock || !connected) {
     res.status(503).json({ error: 'WhatsApp not connected' });
     return;
+  }
+  if (!sessionReady) {
+    // Wait up to 30s for session sync before giving up
+    const deadline = Date.now() + 30_000;
+    while (!sessionReady && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+    if (!sessionReady) {
+      console.warn('[Baileys] /send: sessão não sincronizada após 30s — enviando mesmo assim');
+    }
   }
   try {
     // Groups (@g.us) and phone numbers work fine.
