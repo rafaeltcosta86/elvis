@@ -5,8 +5,21 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   WASocket,
 } from '@whiskeysockets/baileys';
+import type { proto } from '@whiskeysockets/baileys';
 import axios from 'axios';
 import express from 'express';
+import { readdirSync, unlinkSync, existsSync } from 'fs';
+import { join } from 'path';
+
+// Message store for getMessage retries (Signal protocol re-encryption)
+const msgStore = new Map<string, proto.IMessage>();
+function storeMsg(id: string | null | undefined, msg: proto.IMessage | null | undefined) {
+  if (!id || !msg) return;
+  msgStore.set(id, msg);
+  if (msgStore.size > 1000) {
+    msgStore.delete(msgStore.keys().next().value!);
+  }
+}
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const OWNER_PHONE = process.env.OWNER_PHONE ?? '';
@@ -17,23 +30,57 @@ const AUTH_DIR = process.env.AUTH_DIR ?? '/data/auth';
 let sock: WASocket | null = null;
 let connected = false;
 let qrCode: string | null = null;
+let isFirstConnect = true;
 
 // ─── Baileys connection ────────────────────────────────────────────────────
 
+function clearStaleSessions(): void {
+  if (!existsSync(AUTH_DIR)) return;
+  const files = readdirSync(AUTH_DIR).filter(f => f.startsWith('session-'));
+  for (const file of files) {
+    unlinkSync(join(AUTH_DIR, file));
+  }
+  if (files.length > 0) {
+    console.log(`[Baileys] ${files.length} sessão(ões) removida(s) — serão re-estabelecidas`);
+  }
+}
+
 async function connect(): Promise<void> {
+  if (isFirstConnect) {
+    clearStaleSessions();
+    isFirstConnect = false;
+  }
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
+
+  // Patch: sessions marked closed === -1 cause assertSessions to throw "Session closed"
+  // during message retries. Returning undefined instead forces Baileys to create a fresh
+  // session rather than failing permanently, which resolves "Waiting for this message".
+  const baseKeyStore = makeCacheableSignalKeyStore(state.keys, console as any);
+  const originalGet = baseKeyStore.get.bind(baseKeyStore);
+  (baseKeyStore as any).get = async (type: string, ids: string[]) => {
+    const result = await originalGet(type as any, ids);
+    if (type === 'session') {
+      for (const id of ids) {
+        if ((result as any)[id]?.closed === -1) {
+          console.log(`[Baileys] Sessão fechada para ${id} — criando nova sessão`);
+          delete (result as any)[id];
+        }
+      }
+    }
+    return result;
+  };
 
   sock = makeWASocket({
     version,
     auth: {
       creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, console as any),
+      keys: baseKeyStore,
     },
     printQRInTerminal: true,
     browser: ['Elvis', 'Chrome', '1.0.0'],
     syncFullHistory: false,
-    getMessage: async () => ({ conversation: '' }),
+    getMessage: async (key) => key.id ? msgStore.get(key.id) : undefined,
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -65,6 +112,11 @@ async function connect(): Promise<void> {
 
   // ── Incoming messages ──────────────────────────────────────────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    // Store all messages for getMessage retries (Signal protocol)
+    for (const msg of messages) {
+      storeMsg(msg.key.id, msg.message);
+    }
+
     for (const msg of messages) {
       const remoteJid = msg.key.remoteJid ?? '';
       const fromMe = msg.key.fromMe ?? false;
@@ -152,7 +204,8 @@ app.post('/send', async (req, res) => {
       jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
     }
     console.log(`[Baileys] /send → jid="${jid}" text="${text.substring(0, 50)}"`);
-    await sock.sendMessage(jid, { text });
+    const result = await sock.sendMessage(jid, { text });
+    if (result) storeMsg(result.key.id, result.message);
     console.log(`[Baileys] /send ✓ enviado para ${jid}`);
     res.json({ ok: true });
   } catch (err) {
