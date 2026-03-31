@@ -94,9 +94,12 @@ async function connect(): Promise<void> {
 
     if (connection === 'open') {
       connected = true;
-      sessionReady = false; // wait for receivedPendingNotifications
       qrCode = null;
-      console.log('[Baileys] Conectado ao WhatsApp — aguardando sync...');
+      if (sessionReady) {
+        console.log('[Baileys] Conectado ao WhatsApp — sessão já sincronizada');
+      } else {
+        console.log('[Baileys] Conectado ao WhatsApp — aguardando sync...');
+      }
     }
 
     if (receivedPendingNotifications) {
