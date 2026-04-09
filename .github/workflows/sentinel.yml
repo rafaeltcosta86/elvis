@@ -30,7 +30,10 @@ jobs:
 
       - name: Vitest TDD Guard
         run: pnpm test # Garantia do Ciclo Green
-
+      
+      - name: Prepare Gemini Config
+        run: mkdir -p ~/.gemini
+        
       - name: Gemini Audit
         if: success() && !contains(github.event.head_commit.message, '[skip audit]')
         env:
