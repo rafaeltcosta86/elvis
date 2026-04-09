@@ -5,3 +5,5 @@ dist/
 *.env.local
 backups/
 *.dump
+.DS_Store
+.claude/
