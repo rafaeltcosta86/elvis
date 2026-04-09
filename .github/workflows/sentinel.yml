@@ -35,12 +35,15 @@ jobs:
         run: mkdir -p ~/.gemini
         
       - name: Gemini Audit
-        if: success() && !contains(github.event.head_commit.message, '[skip audit]')
+        if: >
+          success() &&
+          github.event_name == 'pull_request' &&
+          !contains(github.event.pull_request.title, '[skip audit]')
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # O comando abaixo envia o diff do commit para o Gemini com o prompt acima
-          git diff HEAD^ HEAD | npx @google/gemini-cli "Instrução: <Cole o Prompt da Seção 1 aqui>"
+          PROMPT="Você é um auditor de arquitetura sênior. Analise o diff abaixo e verifique se ele viola alguma das Invariantes de Ouro do projeto Elvis: (1) Human-in-the-Loop: nenhuma escrita externa (e-mail, calendário, mensagens) sem approval_record_id confirmado no banco; (2) Audit-Log Imutável: proibido UPDATE ou DELETE em audit_log (append-only); (3) Isolamento de Credenciais: descriptografia AES-GCM exclusivamente em packages/shared/src/services/oauthService.ts; (4) Contrato Ternário WhatsApp: respostas devem conter 1) o que foi entendido 2) o que foi feito 3) próximo passo. Responda com VIOLAÇÃO DETECTADA: [invariante e localização] se houver problema, ou apenas APROVADO se estiver tudo correto."
+          git diff origin/${{ github.base_ref }}...HEAD | npx @google/gemini-cli "$PROMPT"
 
       - name: Raise Architecture Issue
         if: failure()
