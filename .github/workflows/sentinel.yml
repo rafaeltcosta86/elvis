@@ -1,0 +1,50 @@
+name: Elvis Sentinel
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necessário para analisar o diff completo
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Vitest TDD Guard
+        run: pnpm test # Garantia do Ciclo Green
+
+      - name: Gemini Audit
+        if: success() && !contains(github.event.head_commit.message, '[skip audit]')
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # O comando abaixo envia o diff do commit para o Gemini com o prompt acima
+          git diff HEAD^ HEAD | npx @google/gemini-cli "Instrução: <Cole o Prompt da Seção 1 aqui>"
+
+      - name: Raise Architecture Issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "🚨 Violação: Invariante 'Human-in-the-Loop' quebrado" \
+            --body "O Sentinela detectou um commit que ignora os Approval Gates. Jules, corrija antes do merge." \
+            --label "architecture-violation"
