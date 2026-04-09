@@ -234,3 +234,30 @@ prisma/            ← schema.prisma + migrations
 - ~~Validação de assinatura do webhook NanoClaw~~ → **resolvido:** Bearer token simples (`Authorization: Bearer <WEBHOOK_SECRET>` via env). Revisar se NanoClaw suportar HMAC no futuro.
 - ~~Critério exato de "tarefa urgente" para o `/today`~~ → **resolvido:** urgente = `due_at <= hoje` OU `priority = URGENT` (qualquer status PENDING/IN_PROGRESS)
 - Política de categorias padrão e correção rápida pelo usuário (antes de M2)
+
+---
+
+## Claude Code — Instruções de Desenvolvimento
+
+### Fluxo obrigatório
+
+Antes de iniciar qualquer implementação (feature, bugfix, refactor, docs):
+
+1. Verificar branch atual (`git branch --show-current`)
+2. Se em `main`, criar branch descritiva antes de qualquer alteração:
+   ```
+   git checkout -b <tipo>/<descricao-curta>
+   ```
+   Tipos: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
+3. Commits atômicos e descritivos ao longo do trabalho
+4. Ao concluir, criar Pull Request com título e descrição claros
+
+### Por que isso importa
+
+- Mudanças trackeáveis via histórico de PRs
+- Facilita revisão, rollback e entendimento do contexto de cada alteração
+- Evita commits diretos em `main` que dificultam rastreabilidade
+
+### Exceções
+
+Só commitar direto em `main` se o usuário **explicitamente** pedir.
