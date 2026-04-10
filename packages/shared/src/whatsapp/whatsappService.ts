@@ -27,7 +27,10 @@ export interface WhatsAppService {
   send(to: string, text: string): Promise<void>;
 }
 
-export function createWhatsAppService(store?: RateLimitStore): WhatsAppService {
+export function createWhatsAppService(
+  store?: RateLimitStore,
+  phoneChecker?: (phone: string) => Promise<boolean>
+): WhatsAppService {
   const enabled = process.env.WHATSAPP_ENABLED === 'true';
   const provider = process.env.WHATSAPP_PROVIDER ?? 'mock';
   const ownerPhone = process.env.OWNER_PHONE ?? '';
@@ -73,7 +76,9 @@ export function createWhatsAppService(store?: RateLimitStore): WhatsAppService {
 
         // Allowlist — also allow @lid JIDs (WhatsApp self-chat linked identity)
         const isLid = to.endsWith('@lid');
-        if (!allowAll && !isLid && !allowlist.has(to)) {
+        const inStaticList = allowAll || isLid || allowlist.has(to);
+        const inDynamic = !inStaticList && phoneChecker ? await phoneChecker(to) : false;
+        if (!inStaticList && !inDynamic) {
           console.warn(`[WhatsApp] blocked: ${to} not in allowlist`);
           return;
         }
