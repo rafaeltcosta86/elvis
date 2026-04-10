@@ -7,7 +7,7 @@ import { addDays, nextMonday } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
-import { findByAlias, addAlias } from '../lib/contactService';
+import { findByAlias, addAlias, createContact } from '../lib/contactService';
 import { classifyIntent } from '../lib/llmService';
 import redis from '../lib/redis';
 
@@ -214,6 +214,17 @@ async function handleIncomingWhatsApp(
             responseText = `✅ Registrado! Agora *${classification.alias}* = ${classification.contact_name}.`;
           } catch {
             responseText = `❌ Contato "${classification.contact_name}" não encontrado. Cadastre-o primeiro.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'CREATE_CONTACT') {
+          const alias = '/' + classification.contact_name.toLowerCase().replace(/\s+/g, '');
+          try {
+            await createContact(classification.contact_name, classification.phone, [alias]);
+            responseText = `✅ Contato *${classification.contact_name}* criado! Use ${alias} <msg> para mandar mensagem.`;
+          } catch {
+            responseText = `❌ Não consegui criar o contato. Verifique se o nome já existe.`;
           }
           break;
         }
