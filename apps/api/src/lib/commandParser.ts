@@ -9,6 +9,8 @@ export type Intent =
   | 'LESS_PROACTIVE'
   | 'RESET_PREFS'
   | 'SEND_TO'
+  | 'CONFIRM'
+  | 'CANCEL'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -19,6 +21,7 @@ export interface ParsedCommand {
     to?: string;
     contactName?: string;
     message?: string;
+    communication_id?: string;
   };
 }
 
@@ -74,6 +77,24 @@ export function parseCommand(text: string): ParsedCommand {
   // /corrigir
   if (/^\/corrigir$/i.test(trimmed)) {
     return { intent: 'RESET_PREFS' };
+  }
+
+  // /confirmar <id>
+  const confirmMatch = /^\/confirmar\s+(.+)$/i.exec(trimmed);
+  if (confirmMatch) {
+    return {
+      intent: 'CONFIRM',
+      args: { communication_id: confirmMatch[1].trim() },
+    };
+  }
+
+  // /cancelar <id>
+  const cancelMatch = /^\/cancelar\s+(.+)$/i.exec(trimmed);
+  if (cancelMatch) {
+    return {
+      intent: 'CANCEL',
+      args: { communication_id: cancelMatch[1].trim() },
+    };
   }
 
   // manda para <nome>: <msg> | fala com <nome> que <msg> | avisa <nome>: <msg>

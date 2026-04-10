@@ -197,8 +197,88 @@ async function handleIncomingWhatsApp(
           responseText = `❌ "${args?.contactName}" não encontrado. Adicione em WHATSAPP_CONTACTS=nome:numero`;
           break;
         }
-        await sendWhatsApp(contact.phone, args?.message ?? '');
-        responseText = `✉️ Mensagem enviada para ${contact.name}`;
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: contact.phone,
+            body: args?.message ?? '',
+            status: 'AWAITING_APPROVAL',
+            metadata: { contactName: contact.name },
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.draft',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `Draft WhatsApp para ${contact.name} (${contact.phone})`,
+          },
+        });
+        responseText =
+          `📋 Vou mandar para *${contact.name}*:\n"${args?.message}"\n\n` +
+          `Confirma?\n/confirmar ${comm.id}\n/cancelar ${comm.id}`;
+        break;
+      }
+
+      case 'CONFIRM': {
+        const comm = await prisma.communication.findUnique({
+          where: { id: args?.communication_id ?? '' },
+        });
+        if (!comm) {
+          responseText = `❌ Solicitação não encontrada.`;
+          break;
+        }
+        if (comm.status !== 'AWAITING_APPROVAL') {
+          responseText = `⚠️ Esta mensagem já foi processada (${comm.status === 'SENT' ? 'enviada' : 'cancelada'}).`;
+          break;
+        }
+        await sendWhatsApp(comm.to!, comm.body!);
+        await prisma.communication.update({
+          where: { id: comm.id },
+          data: { status: 'SENT', approved_at: new Date() },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.sent',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `WhatsApp enviado para ${comm.to}`,
+          },
+        });
+        const meta = comm.metadata as Record<string, string>;
+        responseText = `✉️ Mensagem enviada para ${meta?.contactName ?? comm.to}.`;
+        break;
+      }
+
+      case 'CANCEL': {
+        const comm = await prisma.communication.findUnique({
+          where: { id: args?.communication_id ?? '' },
+        });
+        if (!comm) {
+          responseText = `❌ Solicitação não encontrada.`;
+          break;
+        }
+        if (comm.status !== 'AWAITING_APPROVAL') {
+          responseText = `⚠️ Esta mensagem já foi processada.`;
+          break;
+        }
+        await prisma.communication.update({
+          where: { id: comm.id },
+          data: { status: 'CANCELLED' },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.cancelled',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `WhatsApp cancelado para ${comm.to}`,
+          },
+        });
+        responseText = `🚫 Mensagem cancelada.`;
         break;
       }
 

@@ -41,6 +41,31 @@ describe('parseCommand', () => {
     });
   });
 
+  describe('/confirmar', () => {
+    it('returns CONFIRM intent with communication_id', () => {
+      expect(parseCommand('/confirmar abc-123')).toEqual({
+        intent: 'CONFIRM',
+        args: { communication_id: 'abc-123' },
+      });
+    });
+
+    it('handles UUID communication_id', () => {
+      expect(parseCommand('/confirmar 550e8400-e29b-41d4-a716-446655440000')).toEqual({
+        intent: 'CONFIRM',
+        args: { communication_id: '550e8400-e29b-41d4-a716-446655440000' },
+      });
+    });
+  });
+
+  describe('/cancelar', () => {
+    it('returns CANCEL intent with communication_id', () => {
+      expect(parseCommand('/cancelar abc-123')).toEqual({
+        intent: 'CANCEL',
+        args: { communication_id: 'abc-123' },
+      });
+    });
+  });
+
   describe('CREATE_TASK', () => {
     it('returns CREATE_TASK intent with rawText for plain text', () => {
       expect(parseCommand('comprar leite')).toEqual({
