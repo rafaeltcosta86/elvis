@@ -152,7 +152,10 @@ async function connect(): Promise<void> {
       const isOwnerSender = fromMe || participant.startsWith(OWNER_PHONE) || participant === selfChatJid;
       const isSelfChat = fromMe && remoteJid === selfChatJid;
       const isCommandGroup = !!commandGroupJid && remoteJid === commandGroupJid && isOwnerSender;
-      const isOwnerDm = !fromMe && remoteJid === ownerJid; // owner texting the dedicated Elvis chip
+      // WhatsApp uses @lid (privacy-preserving local ID) for incoming DMs — cannot compare
+      // to OWNER_PHONE@s.whatsapp.net. Since the Elvis chip is private and dedicated,
+      // any non-group non-broadcast incoming DM is treated as an owner command.
+      const isOwnerDm = !fromMe && !remoteJid.endsWith('@g.us') && !remoteJid.endsWith('@broadcast');
       console.log(`[FILTER] isSelf=${isSelfChat} isGroup=${isCommandGroup} isOwnerDm=${isOwnerDm} cmdJid="${commandGroupJid}" remoteJid="${remoteJid}" jidMatch=${remoteJid === commandGroupJid} isOwner=${isOwnerSender} participant="${participant}" selfChatJid="${selfChatJid}"`);
       if (!isSelfChat && !isCommandGroup && !isOwnerDm) continue;
 
