@@ -35,10 +35,22 @@ vi.mock('../../lib/emailService', () => ({
   getEmailSummary: vi.fn(),
 }));
 
+vi.mock('../../lib/contactService', () => ({
+  findByAlias: vi.fn(),
+  findByName: vi.fn(),
+  addAlias: vi.fn(),
+}));
+
+vi.mock('../../lib/llmService', () => ({
+  classifyIntent: vi.fn(),
+}));
+
 import webhookRouter from '../webhook';
 import { getEmailSummary } from '../../lib/emailService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
+import { findByAlias, findByName, addAlias } from '../../lib/contactService';
+import { classifyIntent } from '../../lib/llmService';
 
 const app = express();
 app.use(express.json());
@@ -104,6 +116,104 @@ describe('Webhook — proactivity commands', () => {
     const res = await webhookPost('/mais-proativo');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+});
+
+describe('Webhook — ALIAS_SHORTCUT', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.communication.create as any).mockResolvedValue({
+      id: 'comm-alias-001',
+      status: 'AWAITING_APPROVAL',
+    });
+    (prisma.auditLog.create as any).mockResolvedValue({});
+  });
+
+  it('resolves alias and creates draft when alias is found', async () => {
+    (findByAlias as any).mockResolvedValue({
+      id: 'c1',
+      name: 'Linic',
+      phone: '5511988880000',
+      aliases: ['/linic'],
+    });
+
+    await webhookPost('/linic olá tudo bem');
+
+    expect(findByAlias).toHaveBeenCalledWith('/linic');
+    expect(prisma.communication.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'WHATSAPP',
+          status: 'AWAITING_APPROVAL',
+          to: '5511988880000',
+          body: 'olá tudo bem',
+        }),
+      })
+    );
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Linic');
+    expect(sentText).toContain('/confirmar');
+  });
+
+  it('falls through to CREATE_TASK when alias is not found', async () => {
+    (findByAlias as any).mockResolvedValue(null);
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+    (prisma.task.create as any).mockResolvedValue({ id: 'task-1', title: '/xpto oi' });
+
+    await webhookPost('/xpto oi');
+
+    expect(prisma.task.create).toHaveBeenCalled();
+  });
+});
+
+describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+  });
+
+  it('registers new alias when LLM detects REGISTER_ALIAS intent', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'REGISTER_ALIAS',
+      alias: '/li',
+      contact_name: 'Linic',
+    });
+    (addAlias as any).mockResolvedValue({ name: 'Linic', aliases: ['/linic', '/li'] });
+
+    await webhookPost('de agora em diante /li é a Linic');
+
+    expect(classifyIntent).toHaveBeenCalledWith('de agora em diante /li é a Linic');
+    expect(addAlias).toHaveBeenCalledWith('Linic', '/li');
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('/li');
+    expect(sentText).toContain('Linic');
+  });
+
+  it('replies with error when contact not found during alias registration', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'REGISTER_ALIAS',
+      alias: '/li',
+      contact_name: 'Desconhecido',
+    });
+    (addAlias as any).mockRejectedValue(new Error('Contact "Desconhecido" not found'));
+
+    await webhookPost('de agora em diante /li é a Desconhecido');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('não encontrado');
+  });
+
+  it('creates task when LLM returns UNKNOWN', async () => {
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+    (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'comprar pão' });
+
+    await webhookPost('comprar pão amanhã');
+
+    expect(prisma.task.create).toHaveBeenCalled();
   });
 });
 

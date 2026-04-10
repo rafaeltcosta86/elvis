@@ -7,6 +7,8 @@ import { addDays, nextMonday } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
+import { findByAlias, addAlias } from '../lib/contactService';
+import { classifyIntent } from '../lib/llmService';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
@@ -150,7 +152,55 @@ async function handleIncomingWhatsApp(
         break;
       }
 
+      case 'ALIAS_SHORTCUT': {
+        const contact = await findByAlias(args?.alias ?? '');
+        if (!contact) {
+          // Alias not registered — fall through to CREATE_TASK logic
+          const newTask = await prisma.task.create({
+            data: { title: message_text, category: 'outros' },
+          });
+          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          break;
+        }
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: contact.phone,
+            body: args?.message ?? '',
+            status: 'AWAITING_APPROVAL',
+            metadata: { contactName: contact.name },
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.draft',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `Draft WhatsApp para ${contact.name} (${contact.phone}) via atalho ${args?.alias}`,
+          },
+        });
+        responseText =
+          `📋 Vou mandar para *${contact.name}*:\n"${args?.message}"\n\n` +
+          `Confirma?\n/confirmar ${comm.id}\n/cancelar ${comm.id}`;
+        break;
+      }
+
       case 'CREATE_TASK': {
+        // Try LLM classification before creating a task
+        const classification = await classifyIntent(args?.rawText ?? '');
+
+        if (classification.intent === 'REGISTER_ALIAS') {
+          try {
+            await addAlias(classification.contact_name, classification.alias);
+            responseText = `✅ Registrado! Agora *${classification.alias}* = ${classification.contact_name}.`;
+          } catch {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado. Cadastre-o primeiro.`;
+          }
+          break;
+        }
+
         const newTask = await prisma.task.create({
           data: {
             title: args?.rawText || 'Sem título',

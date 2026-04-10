@@ -11,6 +11,7 @@ export type Intent =
   | 'SEND_TO'
   | 'CONFIRM'
   | 'CANCEL'
+  | 'ALIAS_SHORTCUT'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -22,6 +23,7 @@ export interface ParsedCommand {
     contactName?: string;
     message?: string;
     communication_id?: string;
+    alias?: string;
   };
 }
 
@@ -106,6 +108,15 @@ export function parseCommand(text: string): ParsedCommand {
         contactName: sendToMatch[1].trim(),
         message: sendToMatch[2].trim(),
       },
+    };
+  }
+
+  // /alias <mensagem> — atalho de contato (ex: /linic olá)
+  const aliasMatch = /^(\/\S+)\s+(.+)$/i.exec(trimmed);
+  if (aliasMatch) {
+    return {
+      intent: 'ALIAS_SHORTCUT',
+      args: { alias: aliasMatch[1].trim(), message: aliasMatch[2].trim() },
     };
   }
 
