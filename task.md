@@ -268,6 +268,40 @@ bash scripts/backup.sh && ls backups/  # → arquivo .dump de hoje
 
 ---
 
+### M10 — WhatsApp Approval Gate
+
+**Epic: Human-in-the-Loop para envio de WhatsApp a terceiros**
+
+> **Contexto:** Em 2026-04-09, a hipótese central do MVP foi validada: o comando `SEND_TO` existe e funciona (ex: "manda para assistente: já terminei a reunião"). No entanto, o `ai-blueprints.md` exige `approval_record_id` antes de qualquer escrita externa, e o WhatsApp envia imediatamente sem approval gate — violando a Invariante #1. M10 corrige essa lacuna trazendo WhatsApp para paridade com o fluxo de e-mail.
+
+- [ ] Quando `SEND_TO` é acionado, criar registro `Communication` (status: `AWAITING_APPROVAL`, channel: `WHATSAPP`)
+- [ ] Responder ao owner com preview: _"Vou mandar para [nome]: '[msg]'. Confirma? /confirm [id] ou /cancel [id]"_
+- [ ] Implementar intent `CONFIRM` no commandParser (ex: "/confirm 42")
+- [ ] Implementar intent `CANCEL` no commandParser (ex: "/cancel 42")
+- [ ] Só enviar a mensagem real após `/confirm` — verificar `approval_record_id` no banco
+- [ ] Atualizar `Communication.status` → `SENT` ou `CANCELLED` + entrada no `audit_log`
+- [ ] Testes: tentativa de envio sem confirmação, confirmação, cancelamento, id inválido
+
+**Critérios de aceite:**
+```bash
+# 1. Comando → sem envio imediato, recebe preview
+curl -X POST /webhook/nanoclaw -d '{"message":"manda para assistente: teste"}'
+# → "Vou mandar para assistente: 'teste'. Confirma? /confirm 1 ou /cancel 1"
+
+# 2. Confirmação → envia
+curl -X POST /webhook/nanoclaw -d '{"message":"/confirm 1"}'
+# → "✉️ Mensagem enviada para assistente"
+
+# 3. audit_log registra a ação
+curl GET /status  # confirmar sem erros
+```
+
+**Riscos / rollback:**
+- Verificar que `WHATSAPP_CONTACTS` e `WHATSAPP_ALLOWLIST` têm o número da assistente em produção
+- Rollback: reverter webhook.ts para envio direto se approval gate introduzir regressão
+
+---
+
 ## Definições
 
 ### O que é "feito" (Definition of Done)
@@ -350,3 +384,4 @@ pnpm lint && pnpm build
 | 2026-03-20 | Bloco 32 [COWORK] concluído: scripts/backup.sh + scripts/restore.sh + scripts/smoke-test.sh + scripts/deploy.sh |
 | 2026-03-20 | Bloco 33 [COWORK] concluído: alertService.ts (job failures + queue health) + scheduler queueHealthCheck hourly + 7 testes worker — **143 API + 18 worker testes** |
 | 2026-03-20 | Bloco 34 [COWORK] concluído: .env.prod.example + infra/OPERATIONS.md + .gitignore — **M9 completo** ✅ |
+| 2026-04-09 | [TRAD] Hipótese MVP validada: SEND_TO funciona (commandParser + webhook + whatsappService + adapters). Gap identificado: WhatsApp sem approval gate viola Invariante #1. M10 definido para corrigir. |
