@@ -314,7 +314,8 @@ async function handleIncomingWhatsApp(
             summary: `WhatsApp enviado para ${comm.to}`,
           },
         });
-        responseText = comm.body!;
+        const meta = comm.metadata as Record<string, string>;
+        responseText = `✉️ Enviado para ${meta?.contactName ?? comm.to}.`;
         break;
       }
 
