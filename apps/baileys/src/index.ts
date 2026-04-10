@@ -152,8 +152,9 @@ async function connect(): Promise<void> {
       const isOwnerSender = fromMe || participant.startsWith(OWNER_PHONE) || participant === selfChatJid;
       const isSelfChat = fromMe && remoteJid === selfChatJid;
       const isCommandGroup = !!commandGroupJid && remoteJid === commandGroupJid && isOwnerSender;
-      console.log(`[FILTER] isSelf=${isSelfChat} isGroup=${isCommandGroup} cmdJid="${commandGroupJid}" remoteJid="${remoteJid}" jidMatch=${remoteJid === commandGroupJid} isOwner=${isOwnerSender} participant="${participant}" selfChatJid="${selfChatJid}"`);
-      if (!isSelfChat && !isCommandGroup) continue;
+      const isOwnerDm = !fromMe && remoteJid === ownerJid; // owner texting the dedicated Elvis chip
+      console.log(`[FILTER] isSelf=${isSelfChat} isGroup=${isCommandGroup} isOwnerDm=${isOwnerDm} cmdJid="${commandGroupJid}" remoteJid="${remoteJid}" jidMatch=${remoteJid === commandGroupJid} isOwner=${isOwnerSender} participant="${participant}" selfChatJid="${selfChatJid}"`);
+      if (!isSelfChat && !isCommandGroup && !isOwnerDm) continue;
 
       const text =
         msg.message.conversation ??
