@@ -31,7 +31,7 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
       }),
     });
 
-    const data = await res.json();
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
     const content: string = data?.choices?.[0]?.message?.content ?? '';
     const parsed = JSON.parse(content);
 
