@@ -5,10 +5,16 @@ export type LLMClassification =
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const PROMPT_SYSTEM = `Você é um classificador de intenções para um assistente pessoal chamado Elvis.
-Analise a mensagem e retorne JSON com uma destas estruturas:
-- Registro de atalho: {"intent":"REGISTER_ALIAS","alias":"<atalho>","contact_name":"<nome>"}
-- Criação de contato: {"intent":"CREATE_CONTACT","contact_name":"<nome>","phone":"<número só dígitos>"}
+Analise a mensagem e retorne JSON com UMA destas estruturas:
+
+- Criação de NOVO contato com número de telefone: {"intent":"CREATE_CONTACT","contact_name":"<nome>","phone":"<somente dígitos, ex: 5511999990000>"}
+  Use quando a mensagem contiver um número de telefone E o usuário quiser cadastrar/criar/adicionar um contato.
+
+- Registro de atalho para contato JÁ EXISTENTE (sem número, com atalho tipo /nome): {"intent":"REGISTER_ALIAS","alias":"<atalho>","contact_name":"<nome>"}
+  Use APENAS quando houver um atalho explícito (começa com /) e NÃO houver número de telefone.
+
 - Qualquer outra coisa: {"intent":"UNKNOWN"}
+
 Responda APENAS com o JSON, sem texto adicional.`;
 
 export async function classifyIntent(text: string): Promise<LLMClassification> {
