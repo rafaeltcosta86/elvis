@@ -81,7 +81,10 @@ export function parseCommand(text: string): ParsedCommand {
     return { intent: 'RESET_PREFS' };
   }
 
-  // /confirmar <id>
+  // 1 ou /confirmar <id>
+  if (/^1$/.test(trimmed) || /^\/confirmar$/i.test(trimmed)) {
+    return { intent: 'CONFIRM', args: {} };
+  }
   const confirmMatch = /^\/confirmar\s+(.+)$/i.exec(trimmed);
   if (confirmMatch) {
     return {
@@ -90,7 +93,10 @@ export function parseCommand(text: string): ParsedCommand {
     };
   }
 
-  // /cancelar <id>
+  // 2 ou /cancelar <id>
+  if (/^2$/.test(trimmed) || /^\/cancelar$/i.test(trimmed)) {
+    return { intent: 'CANCEL', args: {} };
+  }
   const cancelMatch = /^\/cancelar\s+(.+)$/i.exec(trimmed);
   if (cancelMatch) {
     return {

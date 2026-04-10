@@ -9,9 +9,27 @@ import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
 import { findByAlias, addAlias } from '../lib/contactService';
 import { classifyIntent } from '../lib/llmService';
+import redis from '../lib/redis';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
+const PENDING_TTL = 600; // 10 minutos
+
+async function savePending(senderId: string, commId: string): Promise<void> {
+  await redis.set(`pending:${senderId}`, commId, 'EX', PENDING_TTL);
+}
+
+async function getPending(senderId: string): Promise<string | null> {
+  return redis.get(`pending:${senderId}`);
+}
+
+async function clearPending(senderId: string): Promise<void> {
+  await redis.del(`pending:${senderId}`);
+}
+
+function draftPreview(contactName: string, message: string): string {
+  return `📋 Vou mandar para *${contactName}*:\n"${message}"\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+}
 
 // Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
 function parseContacts(raw: string): Array<{ name: string; phone: string }> {
@@ -181,9 +199,8 @@ async function handleIncomingWhatsApp(
             summary: `Draft WhatsApp para ${contact.name} (${contact.phone}) via atalho ${args?.alias}`,
           },
         });
-        responseText =
-          `📋 Vou mandar para *${contact.name}*:\n"${args?.message}"\n\n` +
-          `Confirma?\n/confirmar ${comm.id}\n/cancelar ${comm.id}`;
+        await savePending(sender_id, comm.id);
+        responseText = draftPreview(contact.name, args?.message ?? '');
         break;
       }
 
@@ -266,16 +283,14 @@ async function handleIncomingWhatsApp(
             summary: `Draft WhatsApp para ${contact.name} (${contact.phone})`,
           },
         });
-        responseText =
-          `📋 Vou mandar para *${contact.name}*:\n"${args?.message}"\n\n` +
-          `Confirma?\n/confirmar ${comm.id}\n/cancelar ${comm.id}`;
+        await savePending(sender_id, comm.id);
+        responseText = draftPreview(contact.name, args?.message ?? '');
         break;
       }
 
       case 'CONFIRM': {
-        const comm = await prisma.communication.findUnique({
-          where: { id: args?.communication_id ?? '' },
-        });
+        const commId = args?.communication_id ?? await getPending(sender_id);
+        const comm = commId ? await prisma.communication.findUnique({ where: { id: commId } }) : null;
         if (!comm) {
           responseText = `❌ Solicitação não encontrada.`;
           break;
@@ -289,6 +304,7 @@ async function handleIncomingWhatsApp(
           where: { id: comm.id },
           data: { status: 'SENT', approved_at: new Date() },
         });
+        await clearPending(sender_id);
         await prisma.auditLog.create({
           data: {
             actor: 'user',
@@ -298,15 +314,13 @@ async function handleIncomingWhatsApp(
             summary: `WhatsApp enviado para ${comm.to}`,
           },
         });
-        const meta = comm.metadata as Record<string, string>;
-        responseText = `✉️ Mensagem enviada para ${meta?.contactName ?? comm.to}.`;
+        responseText = comm.body!;
         break;
       }
 
       case 'CANCEL': {
-        const comm = await prisma.communication.findUnique({
-          where: { id: args?.communication_id ?? '' },
-        });
+        const commId = args?.communication_id ?? await getPending(sender_id);
+        const comm = commId ? await prisma.communication.findUnique({ where: { id: commId } }) : null;
         if (!comm) {
           responseText = `❌ Solicitação não encontrada.`;
           break;
@@ -319,6 +333,7 @@ async function handleIncomingWhatsApp(
           where: { id: comm.id },
           data: { status: 'CANCELLED' },
         });
+        await clearPending(sender_id);
         await prisma.auditLog.create({
           data: {
             actor: 'user',
