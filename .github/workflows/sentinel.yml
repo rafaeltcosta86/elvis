@@ -37,7 +37,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # O comando abaixo envia o diff do commit para o Gemini com o prompt acima
-          git diff HEAD^ HEAD | npx @google/gemini-cli "Instrução: Estas regras são auditadas automaticamente pelo Gemini Sentinel em cada PR. Violações bloqueiam o merge imediatamente. * Human-in-the-Loop (Escrita Segura): Nenhuma operação de escrita externa (envio de e-mail, criação de eventos no calendário ou mensagens para terceiros) pode ser executada sem validar a presença de um approval_record_id confirmado no banco de dados. * Audit-Log Imutável: É proibido qualquer comando de UPDATE ou DELETE na tabela audit_log. A auditoria deve ser estritamente append-only. * Isolamento de Credenciais: Descriptografia de tokens (AES-GCM) deve ocorrer exclusivamente dentro do packages/shared/src/services/oauthService.ts. O uso direto da OAUTH_ENC_KEY em serviços de domínio é proibido. * Contrato de Resposta Ternário: Toda interação proativa ou resposta de comando no WhatsApp deve seguir a estrutura: 1. O que foi entendido; 2. O que foi feito; 3. O próximo passo sugerido."
+          git diff HEAD^ HEAD | npx @google/gemini-cli "Instrução: <Cole o Prompt da Seção 1 aqui>"
 
       - name: Raise Architecture Issue
         if: failure()
