@@ -4,8 +4,8 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   WASocket,
-} from '@whiskeysockets/baileys';
-import type { proto } from '@whiskeysockets/baileys';
+} from 'baileys';
+import type { proto } from 'baileys';
 import axios from 'axios';
 import express from 'express';
 import { readdirSync, unlinkSync, existsSync } from 'fs';
