@@ -7,7 +7,7 @@ import { addDays, nextMonday } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
-import { findByAlias, findByName, addAlias, createContact } from '../lib/contactService';
+import { findByAlias, findByName, addAlias, createContact, setOwnerAlias } from '../lib/contactService';
 import { classifyIntent, suggestAction, normalizeAudioCommand } from '../lib/llmService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
@@ -223,10 +223,20 @@ async function handleIncomingWhatsApp(
         if (classification.intent === 'CREATE_CONTACT') {
           const alias = '/' + classification.contact_name.toLowerCase().replace(/\s+/g, '');
           try {
-            await createContact(classification.contact_name, classification.phone, [alias]);
+            await createContact(classification.contact_name, classification.phone, [alias], classification.owner_alias);
             responseText = `✅ Contato *${classification.contact_name}* criado! Use ${alias} <msg> para mandar mensagem.`;
           } catch {
             responseText = `❌ Não consegui criar o contato. Verifique se o nome já existe.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'SET_OWNER_ALIAS') {
+          try {
+            await setOwnerAlias(classification.contact_name, classification.owner_alias);
+            responseText = `✅ Pronto! Agora nas mensagens para *${classification.contact_name}* você é *${classification.owner_alias}*.`;
+          } catch {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado.`;
           }
           break;
         }
@@ -451,9 +461,22 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
         await sendWhatsApp(sender_id, responseText);
       }
     } else {
-      // Normalize natural language before routing through the full command pipeline
+      // Passo 1: normalizar com OWNER_NAME global para detectar o contato
       const normalized = await normalizeAudioCommand(text);
-      const result = await handleIncomingWhatsApp(sender_id, normalized);
+      let finalNormalized = normalized;
+
+      // Passo 2: se for SEND_TO, buscar owner_alias específico do contato
+      const parsed = parseCommand(normalized);
+      if (parsed.intent === 'SEND_TO' && parsed.args?.contactName) {
+        const contact = await findByName(parsed.args.contactName);
+        const contactAlias = contact?.owner_alias;
+        const defaultAlias = process.env.OWNER_NAME ?? 'Rafael';
+        if (contactAlias && contactAlias !== defaultAlias) {
+          finalNormalized = await normalizeAudioCommand(text, contactAlias);
+        }
+      }
+
+      const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
       await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
     }
 

@@ -130,11 +130,12 @@ model OAuthToken {
 }
 
 model Contact {
-  id         String   @id @default(uuid())
-  name       String   @unique
-  phone      String
-  aliases    String[]
-  created_at DateTime @default(now())
+  id          String   @id @default(uuid())
+  name        String   @unique
+  phone       String
+  aliases     String[]
+  owner_alias String   @default("Rafael")
+  created_at  DateTime @default(now())
 
   @@index([aliases])
 }

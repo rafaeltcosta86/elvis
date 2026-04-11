@@ -18,6 +18,7 @@ import {
   findByName,
   addAlias,
   createContact,
+  setOwnerAlias,
   listContacts,
 } from '../contactService';
 
@@ -26,6 +27,7 @@ const linic = {
   name: 'Linic',
   phone: '5511988880000',
   aliases: ['/linic', 'linic'],
+  owner_alias: 'Rafael',
   created_at: new Date(),
 };
 
@@ -86,13 +88,44 @@ describe('addAlias', () => {
 });
 
 describe('createContact', () => {
-  it('creates a new contact with aliases', async () => {
+  it('uses OWNER_NAME env var as owner_alias when not provided', async () => {
+    process.env.OWNER_NAME = 'Rafael';
     (prisma.contact.create as any).mockResolvedValue(linic);
     const result = await createContact('Linic', '5511988880000', ['/linic']);
     expect(prisma.contact.create).toHaveBeenCalledWith({
-      data: { name: 'Linic', phone: '5511988880000', aliases: ['/linic'] },
+      data: { name: 'Linic', phone: '5511988880000', aliases: ['/linic'], owner_alias: 'Rafael' },
     });
     expect(result).toEqual(linic);
+  });
+
+  it('uses explicit ownerAlias when provided', async () => {
+    (prisma.contact.create as any).mockResolvedValue({ ...linic, owner_alias: 'Rafa' });
+    const result = await createContact('Linic', '5511988880000', ['/linic'], 'Rafa');
+    expect(prisma.contact.create).toHaveBeenCalledWith({
+      data: { name: 'Linic', phone: '5511988880000', aliases: ['/linic'], owner_alias: 'Rafa' },
+    });
+    expect(result.owner_alias).toBe('Rafa');
+  });
+});
+
+describe('setOwnerAlias', () => {
+  it('updates owner_alias for existing contact', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(linic);
+    const updated = { ...linic, owner_alias: 'pai' };
+    (prisma.contact.update as any).mockResolvedValue(updated);
+
+    const result = await setOwnerAlias('Linic', 'pai');
+
+    expect(prisma.contact.update).toHaveBeenCalledWith({
+      where: { id: linic.id },
+      data: { owner_alias: 'pai' },
+    });
+    expect(result.owner_alias).toBe('pai');
+  });
+
+  it('throws if contact not found', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(null);
+    await expect(setOwnerAlias('Desconhecido', 'pai')).rejects.toThrow('not found');
   });
 });
 
