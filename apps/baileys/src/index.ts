@@ -208,6 +208,17 @@ app.get('/status', (_req, res) => {
   res.json({ connected, qr: qrCode ?? undefined });
 });
 
+// Diagnóstico: verifica se USyncQuery funciona para um número
+app.get('/check/:phone', async (req, res) => {
+  if (!sock || !connected) { res.status(503).json({ error: 'not connected' }); return; }
+  try {
+    const result = await sock.onWhatsApp(req.params.phone);
+    res.json({ result });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 app.post('/send', async (req, res) => {
   const { to, text } = req.body as { to?: string; text?: string };
   if (!to || !text) {
