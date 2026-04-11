@@ -436,20 +436,9 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
         await sendWhatsApp(sender_id, responseText);
       }
     } else {
-      const classification = await classifyIntent(text);
-      responseText = `🎙️ Entendi: "${text}"\n\n📋 ${classification.intent !== 'UNKNOWN' ? 'Vou executar: ' + text : 'Vou criar a tarefa: ' + text}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
-      const comm = await prisma.communication.create({
-        data: {
-          provider: 'WHATSAPP',
-          type: 'DRAFT',
-          to: sender_id,
-          body: text,
-          status: 'AWAITING_APPROVAL',
-          metadata: { source: 'audio_command', classification },
-        },
-      });
-      await savePending(sender_id, comm.id);
-      await sendWhatsApp(sender_id, responseText);
+      // Route through the full command pipeline — SEND_TO/ALIAS/task have their own confirm steps
+      const result = await handleIncomingWhatsApp(sender_id, text);
+      await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
     }
 
     res.json({ ok: true });

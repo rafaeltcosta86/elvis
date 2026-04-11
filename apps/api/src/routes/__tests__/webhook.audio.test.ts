@@ -6,6 +6,8 @@ vi.mock('../../lib/prisma', () => ({
   default: {
     communication: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
+    task: { create: vi.fn() },
+    userProfile: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -78,9 +80,10 @@ describe('POST /webhook/baileys-audio', () => {
     expect(res.status).toBe(400);
   });
 
-  it('áudio próprio (is_forwarded=false): transcreve e envia preview com confirm/cancel', async () => {
+  it('áudio próprio (is_forwarded=false): transcreve e executa comando via pipeline completo', async () => {
     vi.mocked(transcribeAudio).mockResolvedValueOnce('lembra de ligar pra Linic amanhã');
     vi.mocked(classifyIntent).mockResolvedValueOnce({ intent: 'UNKNOWN' });
+    (prisma.task.create as any).mockResolvedValueOnce({ id: 'task-001', title: 'lembra de ligar pra Linic amanhã' });
 
     const res = await audioPost(
       { sender_id: '5511996800178', is_forwarded: 'false', mimetype: 'audio/ogg' },
@@ -88,14 +91,32 @@ describe('POST /webhook/baileys-audio', () => {
     );
 
     expect(res.status).toBe(200);
-    expect(sendWhatsApp).toHaveBeenCalledWith(
-      '5511996800178',
-      expect.stringContaining('lembra de ligar pra Linic amanhã')
+    expect(prisma.task.create).toHaveBeenCalled();
+    const sentText: string = vi.mocked(sendWhatsApp).mock.calls[0][1];
+    expect(sentText).toContain('lembra de ligar pra Linic amanhã');
+    expect(sentText).toContain('✅');
+  });
+
+  it('áudio próprio (is_forwarded=false): SEND_TO cria draft e mostra preview com confirm/cancel', async () => {
+    process.env.WHATSAPP_CONTACTS = 'amanda:5541999990001';
+    vi.mocked(transcribeAudio).mockResolvedValueOnce('manda para amanda: oi');
+    (prisma.communication.create as any).mockResolvedValueOnce({ id: 'comm-audio-001', status: 'AWAITING_APPROVAL' });
+    (prisma.auditLog.create as any).mockResolvedValueOnce({});
+
+    const res = await audioPost(
+      { sender_id: '5511996800178', is_forwarded: 'false', mimetype: 'audio/ogg' },
+      Buffer.from('fake-audio')
     );
-    expect(sendWhatsApp).toHaveBeenCalledWith(
-      '5511996800178',
-      expect.stringContaining('1️⃣')
+
+    expect(res.status).toBe(200);
+    expect(prisma.communication.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ to: '5541999990001', status: 'AWAITING_APPROVAL' }),
+      })
     );
+    const sentText: string = vi.mocked(sendWhatsApp).mock.calls[0][1];
+    expect(sentText).toContain('manda para amanda: oi');
+    expect(sentText).toContain('1️⃣');
   });
 
   it('áudio encaminhado (is_forwarded=true) com ação clara: envia sugestão + confirm/cancel', async () => {
