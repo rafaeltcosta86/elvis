@@ -302,6 +302,55 @@ curl GET /status  # confirmar sem erros
 
 ---
 
+### M11 — Contatos em DB + Atalhos Semânticos
+
+**Epic: UX fluída para envio de mensagens a contatos**
+
+> Hipótese: o fluxo `manda para Linic: <msg>` pode ser simplificado para `/linic <msg>` e o Elvis deve aprender novos atalhos a partir de linguagem natural sem formato fixo.
+
+- [x] Tabela `Contact` no Prisma (id, name, phone, aliases[], created_at)
+- [x] Migration `add_contact_table` aplicada
+- [x] `contactService.ts` — findByAlias, findByName, addAlias, createContact, listContacts
+- [x] `llmService.ts` — classifyIntent via Groq (llama-3.3-70b, free tier)
+- [x] `commandParser.ts` — intent ALIAS_SHORTCUT (`/linic <msg>`)
+- [x] Webhook — ALIAS_SHORTCUT: resolve alias no banco → cria draft → pede confirmação
+- [x] Webhook — CREATE_TASK: chama LLM antes de criar tarefa; se REGISTER_ALIAS → persiste alias
+- [x] `.env.prod.example` — documenta GROQ_API_KEY
+- [x] 175 testes passando (21 novos), sem regressões
+
+**Critérios de aceite:**
+```bash
+# 1. Cadastrar contato (seed manual ou via psql)
+# INSERT INTO "Contact" (id, name, phone, aliases) VALUES (gen_random_uuid(), 'Linic', '5511988880000', ARRAY['/linic']);
+
+# 2. Atalho rápido
+curl -X POST /webhook/nanoclaw -d '{"message":"/linic olá tudo bem"}'
+# → preview "📋 Vou mandar para Linic: 'olá tudo bem'. Confirma?"
+
+# 3. Aprendizado semântico
+curl -X POST /webhook/nanoclaw -d '{"message":"de agora em diante /li é a Linic"}'
+# → "✅ Registrado! Agora /li = Linic."
+
+# 4. Usar novo atalho
+curl -X POST /webhook/nanoclaw -d '{"message":"/li oi"}'
+# → preview de confirmação
+```
+
+---
+
+### M12 — Suporte a Áudio (Backlog)
+
+**Epic: Receber e processar mensagens de voz do WhatsApp**
+
+> Custo estimado: $0 no free tier do Groq (Whisper Large v3) para até 100 msg/dia com 50% voz.
+
+- [ ] Receber payload de áudio OGG do webhook NanoClaw/Baileys
+- [ ] Transcrever via Groq Whisper (`whisper-large-v3`, free tier)
+- [ ] Passar transcrição ao `handleIncomingWhatsApp` como texto normal
+- [ ] Testar com mensagens de voz reais no WhatsApp
+
+---
+
 ## Definições
 
 ### O que é "feito" (Definition of Done)
@@ -385,3 +434,4 @@ pnpm lint && pnpm build
 | 2026-03-20 | Bloco 33 [COWORK] concluído: alertService.ts (job failures + queue health) + scheduler queueHealthCheck hourly + 7 testes worker — **143 API + 18 worker testes** |
 | 2026-03-20 | Bloco 34 [COWORK] concluído: .env.prod.example + infra/OPERATIONS.md + .gitignore — **M9 completo** ✅ |
 | 2026-04-09 | [TRAD] Hipótese MVP validada: SEND_TO funciona (commandParser + webhook + whatsappService + adapters). Gap identificado: WhatsApp sem approval gate viola Invariante #1. M10 definido para corrigir. |
+| 2026-04-10 | M11 [COWORK] concluído: Contact table + migration, contactService, llmService (Groq), ALIAS_SHORTCUT, aprendizado semântico de atalhos — **175 testes passando** ✅ |

@@ -41,6 +41,26 @@ describe('parseCommand', () => {
     });
   });
 
+  describe('ALIAS_SHORTCUT', () => {
+    it('returns ALIAS_SHORTCUT for /linic <msg>', () => {
+      expect(parseCommand('/linic olá tudo bem')).toEqual({
+        intent: 'ALIAS_SHORTCUT',
+        args: { alias: '/linic', message: 'olá tudo bem' },
+      });
+    });
+
+    it('returns ALIAS_SHORTCUT for /li <msg>', () => {
+      expect(parseCommand('/li oi')).toEqual({
+        intent: 'ALIAS_SHORTCUT',
+        args: { alias: '/li', message: 'oi' },
+      });
+    });
+
+    it('does NOT return ALIAS_SHORTCUT for known commands like /hoje', () => {
+      expect(parseCommand('/hoje')).toEqual({ intent: 'TODAY' });
+    });
+  });
+
   describe('/confirmar', () => {
     it('returns CONFIRM intent with communication_id', () => {
       expect(parseCommand('/confirmar abc-123')).toEqual({
