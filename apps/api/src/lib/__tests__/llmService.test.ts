@@ -63,6 +63,43 @@ describe('classifyIntent', () => {
     const result = await classifyIntent('qualquer coisa');
     expect(result).toEqual<LLMClassification>({ intent: 'UNKNOWN' });
   });
+
+  it('returns CREATE_CONTACT with phone', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"CREATE_CONTACT","contact_name":"Carlinha","phone":"5511999990000"}')
+    );
+    const result = await classifyIntent('cria o contato Carlinha, número 5511999990000');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'CREATE_CONTACT',
+      contact_name: 'Carlinha',
+      phone: '5511999990000',
+    });
+  });
+
+  it('returns CREATE_CONTACT with optional owner_alias', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"CREATE_CONTACT","contact_name":"Carlinha","phone":"5511999990000","owner_alias":"Rafa"}')
+    );
+    const result = await classifyIntent('cria o contato Carlinha, número 5511999990000, interação Rafa');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'CREATE_CONTACT',
+      contact_name: 'Carlinha',
+      phone: '5511999990000',
+      owner_alias: 'Rafa',
+    });
+  });
+
+  it('returns SET_OWNER_ALIAS', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"SET_OWNER_ALIAS","contact_name":"Estela","owner_alias":"pai"}')
+    );
+    const result = await classifyIntent('agora sou o pai pra Estela');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'SET_OWNER_ALIAS',
+      contact_name: 'Estela',
+      owner_alias: 'pai',
+    });
+  });
 });
 
 describe('normalizeAudioCommand', () => {
@@ -102,5 +139,14 @@ describe('normalizeAudioCommand', () => {
     mockFetch.mockRejectedValue(new Error('network error'));
     const result = await normalizeAudioCommand('Manda um oi pra Amanda.');
     expect(result).toBe('Manda um oi pra Amanda.');
+  });
+
+  it('usa ownerAlias do contato quando fornecido', async () => {
+    mockFetch.mockResolvedValue(groqResponse('manda para Linic: Rafa chega às 18h'));
+    const result = await normalizeAudioCommand('Fala pra Linic que eu chego às 18h', 'Rafa');
+    expect(result).toBe('manda para Linic: Rafa chega às 18h');
+    // verifica que o prompt enviado contém "Rafa"
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.messages[0].content).toContain('Rafa');
   });
 });
