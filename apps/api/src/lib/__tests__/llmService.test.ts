@@ -66,20 +66,26 @@ describe('classifyIntent', () => {
 });
 
 describe('normalizeAudioCommand', () => {
-  it('normaliza comando de envio: "Manda um oi pra Amanda" → "manda para Amanda: oi"', async () => {
-    mockFetch.mockResolvedValue(
-      groqResponse('manda para Amanda: oi')
-    );
-
+  it('normaliza "Manda um oi pra Amanda" → "manda para Amanda: oi"', async () => {
+    mockFetch.mockResolvedValue(groqResponse('manda para Amanda: oi'));
     const result = await normalizeAudioCommand('Manda um oi pra Amanda.');
     expect(result).toBe('manda para Amanda: oi');
   });
 
-  it('retorna texto limpo para comandos sem envio: "lembra de comprar pão"', async () => {
-    mockFetch.mockResolvedValue(
-      groqResponse('comprar pão')
-    );
+  it('reformula perspectiva: "Diga para Estela que o RG dela está na casa da Karen"', async () => {
+    mockFetch.mockResolvedValue(groqResponse('manda para Estela: seu RG está na casa da Karen'));
+    const result = await normalizeAudioCommand('Diga para Estela que o RG dela está na casa da Karen');
+    expect(result).toBe('manda para Estela: seu RG está na casa da Karen');
+  });
 
+  it('inclui atribuição quando dono pede para "falar que eu disse"', async () => {
+    mockFetch.mockResolvedValue(groqResponse('manda para Estela: seu pai pediu pra avisar: seu RG está na casa da Karen'));
+    const result = await normalizeAudioCommand('Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen');
+    expect(result).toBe('manda para Estela: seu pai pediu pra avisar: seu RG está na casa da Karen');
+  });
+
+  it('retorna texto limpo para comandos sem envio: "lembra de comprar pão"', async () => {
+    mockFetch.mockResolvedValue(groqResponse('comprar pão'));
     const result = await normalizeAudioCommand('lembra de comprar pão amanhã');
     expect(result).toBe('comprar pão');
   });
