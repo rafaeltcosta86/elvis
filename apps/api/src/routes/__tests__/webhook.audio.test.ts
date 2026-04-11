@@ -26,6 +26,13 @@ vi.mock('../../lib/redis', () => ({
   default: { set: vi.fn(), get: vi.fn(), del: vi.fn() },
 }));
 
+vi.mock('../../lib/contactService', () => ({
+  findByAlias: vi.fn().mockResolvedValue(null),
+  findByName: vi.fn().mockResolvedValue(null),
+  addAlias: vi.fn(),
+  createContact: vi.fn(),
+}));
+
 import webhookRouter from '../webhook';
 import { transcribeAudio } from '../../lib/whisperService';
 import { classifyIntent, suggestAction } from '../../lib/llmService';
