@@ -7,7 +7,7 @@ import { addDays, nextMonday } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
-import { findByAlias, addAlias, createContact } from '../lib/contactService';
+import { findByAlias, findByName, addAlias, createContact } from '../lib/contactService';
 import { classifyIntent, suggestAction } from '../lib/llmService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
@@ -269,12 +269,18 @@ async function handleIncomingWhatsApp(
       }
 
       case 'SEND_TO': {
-        const contacts = parseContacts(process.env.WHATSAPP_CONTACTS ?? '');
-        const contact = contacts.find(
+        // 1. DB contacts (via contactService)
+        const dbContact = await findByName(args?.contactName ?? '');
+        // 2. Fallback: WHATSAPP_CONTACTS env var
+        const envContacts = parseContacts(process.env.WHATSAPP_CONTACTS ?? '');
+        const envContact = envContacts.find(
           (c) => c.name.toLowerCase() === (args?.contactName ?? '').toLowerCase()
         );
+        const contact = dbContact
+          ? { name: dbContact.name, phone: dbContact.phone }
+          : envContact ?? null;
         if (!contact) {
-          responseText = `❌ "${args?.contactName}" não encontrado. Adicione em WHATSAPP_CONTACTS=nome:numero`;
+          responseText = `❌ "${args?.contactName}" não encontrado. Cadastre com /criar-contato ou adicione em WHATSAPP_CONTACTS=nome:numero`;
           break;
         }
         const comm = await prisma.communication.create({

@@ -37,7 +37,7 @@ vi.mock('../../lib/emailService', () => ({
 
 vi.mock('../../lib/contactService', () => ({
   findByAlias: vi.fn(),
-  findByName: vi.fn(),
+  findByName: vi.fn().mockResolvedValue(null),
   addAlias: vi.fn(),
 }));
 
@@ -55,6 +55,7 @@ import { getEmailSummary } from '../../lib/emailService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
 import { findByAlias, findByName, addAlias } from '../../lib/contactService';
+// findByName is mocked to return null by default (env var contacts used instead)
 import { classifyIntent } from '../../lib/llmService';
 
 const app = express();
