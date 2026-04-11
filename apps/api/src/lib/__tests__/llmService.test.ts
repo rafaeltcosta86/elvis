@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-import { classifyIntent, type LLMClassification } from '../llmService';
+import { classifyIntent, normalizeAudioCommand, type LLMClassification } from '../llmService';
 
 function groqResponse(content: string) {
   return {
@@ -62,5 +62,38 @@ describe('classifyIntent', () => {
     mockFetch.mockRejectedValue(new Error('network error'));
     const result = await classifyIntent('qualquer coisa');
     expect(result).toEqual<LLMClassification>({ intent: 'UNKNOWN' });
+  });
+});
+
+describe('normalizeAudioCommand', () => {
+  it('normaliza comando de envio: "Manda um oi pra Amanda" → "manda para Amanda: oi"', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('manda para Amanda: oi')
+    );
+
+    const result = await normalizeAudioCommand('Manda um oi pra Amanda.');
+    expect(result).toBe('manda para Amanda: oi');
+  });
+
+  it('retorna texto limpo para comandos sem envio: "lembra de comprar pão"', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('comprar pão')
+    );
+
+    const result = await normalizeAudioCommand('lembra de comprar pão amanhã');
+    expect(result).toBe('comprar pão');
+  });
+
+  it('retorna o texto original quando API key está ausente', async () => {
+    delete process.env.GROQ_API_KEY;
+    const result = await normalizeAudioCommand('Manda um oi pra Amanda.');
+    expect(result).toBe('Manda um oi pra Amanda.');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('retorna o texto original quando LLM falha', async () => {
+    mockFetch.mockRejectedValue(new Error('network error'));
+    const result = await normalizeAudioCommand('Manda um oi pra Amanda.');
+    expect(result).toBe('Manda um oi pra Amanda.');
   });
 });
