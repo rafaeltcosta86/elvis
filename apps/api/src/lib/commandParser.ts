@@ -105,6 +105,19 @@ export function parseCommand(text: string): ParsedCommand {
     };
   }
 
+  // Linguagem natural de áudio: "manda <msg> pra/para/pro <nome>[.]"
+  // ex: "Manda um oi pra Amanda." / "manda um abraço para João"
+  const sendToNaturalMatch = /^manda(?:r)?\s+(.+?)\s+(?:pra|para|pro)\s+([^\s,.:]+)[.,]?$/i.exec(trimmed);
+  if (sendToNaturalMatch) {
+    return {
+      intent: 'SEND_TO',
+      args: {
+        contactName: sendToNaturalMatch[2].trim(),
+        message: sendToNaturalMatch[1].trim(),
+      },
+    };
+  }
+
   // manda para <nome>: <msg> | fala com <nome> que <msg> | avisa <nome>: <msg>
   const sendToMatch = /^(?:manda(?:r)? (?:para|pro|pra)|fala com|avisa) (.+?)(?::|,| que | dizendo ) (.+)$/i.exec(trimmed);
   if (sendToMatch) {
