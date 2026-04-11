@@ -17,6 +17,12 @@ vi.mock('../../lib/prisma', () => ({
     },
     auditLog: {
       findMany: vi.fn(),
+      create: vi.fn(),
+    },
+    communication: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
@@ -29,10 +35,27 @@ vi.mock('../../lib/emailService', () => ({
   getEmailSummary: vi.fn(),
 }));
 
+vi.mock('../../lib/contactService', () => ({
+  findByAlias: vi.fn(),
+  findByName: vi.fn(),
+  addAlias: vi.fn(),
+}));
+
+vi.mock('../../lib/llmService', () => ({
+  classifyIntent: vi.fn(),
+  suggestAction: vi.fn(),
+}));
+
+vi.mock('../../lib/redis', () => ({
+  default: { set: vi.fn().mockResolvedValue('OK'), get: vi.fn().mockResolvedValue(null), del: vi.fn().mockResolvedValue(1) },
+}));
+
 import webhookRouter from '../webhook';
 import { getEmailSummary } from '../../lib/emailService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
+import { findByAlias, findByName, addAlias } from '../../lib/contactService';
+import { classifyIntent } from '../../lib/llmService';
 
 const app = express();
 app.use(express.json());
@@ -98,6 +121,254 @@ describe('Webhook — proactivity commands', () => {
     const res = await webhookPost('/mais-proativo');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+});
+
+describe('Webhook — ALIAS_SHORTCUT', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.communication.create as any).mockResolvedValue({
+      id: 'comm-alias-001',
+      status: 'AWAITING_APPROVAL',
+    });
+    (prisma.auditLog.create as any).mockResolvedValue({});
+  });
+
+  it('resolves alias and creates draft when alias is found', async () => {
+    (findByAlias as any).mockResolvedValue({
+      id: 'c1',
+      name: 'Linic',
+      phone: '5511988880000',
+      aliases: ['/linic'],
+    });
+
+    await webhookPost('/linic olá tudo bem');
+
+    expect(findByAlias).toHaveBeenCalledWith('/linic');
+    expect(prisma.communication.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'WHATSAPP',
+          status: 'AWAITING_APPROVAL',
+          to: '5511988880000',
+          body: 'olá tudo bem',
+        }),
+      })
+    );
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Linic');
+    expect(sentText).toContain('1️⃣');
+  });
+
+  it('falls through to CREATE_TASK when alias is not found', async () => {
+    (findByAlias as any).mockResolvedValue(null);
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+    (prisma.task.create as any).mockResolvedValue({ id: 'task-1', title: '/xpto oi' });
+
+    await webhookPost('/xpto oi');
+
+    expect(prisma.task.create).toHaveBeenCalled();
+  });
+});
+
+describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+  });
+
+  it('registers new alias when LLM detects REGISTER_ALIAS intent', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'REGISTER_ALIAS',
+      alias: '/li',
+      contact_name: 'Linic',
+    });
+    (addAlias as any).mockResolvedValue({ name: 'Linic', aliases: ['/linic', '/li'] });
+
+    await webhookPost('de agora em diante /li é a Linic');
+
+    expect(classifyIntent).toHaveBeenCalledWith('de agora em diante /li é a Linic');
+    expect(addAlias).toHaveBeenCalledWith('Linic', '/li');
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('/li');
+    expect(sentText).toContain('Linic');
+  });
+
+  it('replies with error when contact not found during alias registration', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'REGISTER_ALIAS',
+      alias: '/li',
+      contact_name: 'Desconhecido',
+    });
+    (addAlias as any).mockRejectedValue(new Error('Contact "Desconhecido" not found'));
+
+    await webhookPost('de agora em diante /li é a Desconhecido');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('não encontrado');
+  });
+
+  it('creates task when LLM returns UNKNOWN', async () => {
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+    (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'comprar pão' });
+
+    await webhookPost('comprar pão amanhã');
+
+    expect(prisma.task.create).toHaveBeenCalled();
+  });
+});
+
+describe('Webhook — SEND_TO (approval gate)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    process.env.WHATSAPP_CONTACTS = 'assistente:5511988880000';
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.communication.create as any).mockResolvedValue({
+      id: 'comm-uuid-001',
+      status: 'AWAITING_APPROVAL',
+    });
+    (prisma.auditLog.create as any).mockResolvedValue({});
+  });
+
+  it('does NOT send WhatsApp immediately when SEND_TO is triggered', async () => {
+    await webhookPost('manda para assistente: olá tudo bem');
+
+    // sendWhatsApp must only be called once — to reply to the owner (preview), not to the contact
+    const calls = (sendWhatsApp as any).mock.calls;
+    const sentToContact = calls.some(([to]: [string]) => to === '5511988880000');
+    expect(sentToContact).toBe(false);
+  });
+
+  it('creates a Communication record with AWAITING_APPROVAL when SEND_TO is triggered', async () => {
+    await webhookPost('manda para assistente: olá tudo bem');
+
+    expect(prisma.communication.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'WHATSAPP',
+          status: 'AWAITING_APPROVAL',
+          to: '5511988880000',
+          body: 'olá tudo bem',
+        }),
+      })
+    );
+  });
+
+  it('replies to owner with a preview and confirmation instructions', async () => {
+    await webhookPost('manda para assistente: olá tudo bem');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('assistente');
+    expect(sentText).toContain('olá tudo bem');
+    expect(sentText).toContain('1️⃣');
+    expect(sentText).toContain('2️⃣');
+  });
+
+  it('replies with error if contact is not found', async () => {
+    await webhookPost('manda para desconhecido: oi');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('não encontrado');
+  });
+});
+
+describe('Webhook — CONFIRM intent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.auditLog.create as any).mockResolvedValue({});
+  });
+
+  it('sends the WhatsApp message and updates status to SENT on confirm', async () => {
+    (prisma.communication.findUnique as any).mockResolvedValue({
+      id: 'comm-uuid-001',
+      provider: 'WHATSAPP',
+      status: 'AWAITING_APPROVAL',
+      to: '5511988880000',
+      body: 'olá tudo bem',
+      metadata: { contactName: 'assistente' },
+    });
+    (prisma.communication.update as any).mockResolvedValue({});
+
+    await webhookPost('/confirmar comm-uuid-001');
+
+    expect(sendWhatsApp).toHaveBeenCalledWith('5511988880000', 'olá tudo bem');
+    expect(prisma.communication.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'comm-uuid-001' },
+        data: expect.objectContaining({ status: 'SENT' }),
+      })
+    );
+    const sentText: string = (sendWhatsApp as any).mock.calls.find(
+      ([to]: [string]) => to === '551199999999'
+    )?.[1];
+    expect(sentText).toContain('Enviado para');
+  });
+
+  it('replies with error if communication_id not found on confirm', async () => {
+    (prisma.communication.findUnique as any).mockResolvedValue(null);
+
+    await webhookPost('/confirmar comm-nao-existe');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('não encontrada');
+  });
+
+  it('replies with error if communication is not AWAITING_APPROVAL', async () => {
+    (prisma.communication.findUnique as any).mockResolvedValue({
+      id: 'comm-uuid-001',
+      status: 'SENT',
+      to: '5511988880000',
+      body: 'olá',
+      metadata: {},
+    });
+
+    await webhookPost('/confirmar comm-uuid-001');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('já foi');
+  });
+});
+
+describe('Webhook — CANCEL intent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.auditLog.create as any).mockResolvedValue({});
+  });
+
+  it('cancels the communication and does not send WhatsApp on cancel', async () => {
+    (prisma.communication.findUnique as any).mockResolvedValue({
+      id: 'comm-uuid-001',
+      provider: 'WHATSAPP',
+      status: 'AWAITING_APPROVAL',
+      to: '5511988880000',
+      body: 'olá tudo bem',
+      metadata: { contactName: 'assistente' },
+    });
+    (prisma.communication.update as any).mockResolvedValue({});
+
+    await webhookPost('/cancelar comm-uuid-001');
+
+    const sentToContact = (sendWhatsApp as any).mock.calls.some(
+      ([to]: [string]) => to === '5511988880000'
+    );
+    expect(sentToContact).toBe(false);
+    expect(prisma.communication.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'comm-uuid-001' },
+        data: expect.objectContaining({ status: 'CANCELLED' }),
+      })
+    );
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('cancelada');
   });
 });
 

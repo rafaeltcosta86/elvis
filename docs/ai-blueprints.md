@@ -33,7 +33,7 @@ As tarefas devem ser categorizadas antes da execução para definir o nível de 
 ---
 
 ## 📜 4. Regras Operacionais para Agentes
-1.  **Tag `[skip audit]`:** Utilize obrigatoriamente esta tag em mensagens de commit puramente documentais (ex: atualizar `task.md` ou `DECISIONS.md`) para economizar tokens e tempo de CI.
+1.  **Tag `[skip audit]`:** Utilize obrigatoriamente esta tag em mensagens de commit puramente documentais (ex: atualizar `task.md` ou `docs/architecture.md`) para economizar tokens e tempo de CI.
 2.  **Retroalimentação de Backlog:** Falhas de auditoria ou débitos técnicos detectados devem ser convertidos em Issues e registrados na seção correspondente do `task.md`.
 3.  **Resolução de Conflitos:** Devido a restrições de rede, resolva conflitos via comparação direta de arquivos e novos commits de mesclagem, evitando comandos complexos de `rebase`.
 4.  **Dry-Run por Padrão:** Em ambientes de desenvolvimento ou correção automática, o Jules deve preferir o modo `dry_run: true` em integrações externas até que a lógica de aprovação seja validada.

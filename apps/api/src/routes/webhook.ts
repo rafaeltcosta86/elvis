@@ -7,9 +7,31 @@ import { addDays, nextMonday } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
+import { findByAlias, addAlias, createContact } from '../lib/contactService';
+import { classifyIntent, suggestAction } from '../lib/llmService';
+import { transcribeAudio } from '../lib/whisperService';
+import multer from 'multer';
+import redis from '../lib/redis';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
+const PENDING_TTL = 600; // 10 minutos
+
+async function savePending(senderId: string, commId: string): Promise<void> {
+  await redis.set(`pending:${senderId}`, commId, 'EX', PENDING_TTL);
+}
+
+async function getPending(senderId: string): Promise<string | null> {
+  return redis.get(`pending:${senderId}`);
+}
+
+async function clearPending(senderId: string): Promise<void> {
+  await redis.del(`pending:${senderId}`);
+}
+
+function draftPreview(contactName: string, message: string): string {
+  return `📋 Vou mandar para *${contactName}*:\n"${message}"\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+}
 
 // Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
 function parseContacts(raw: string): Array<{ name: string; phone: string }> {
@@ -150,7 +172,65 @@ async function handleIncomingWhatsApp(
         break;
       }
 
+      case 'ALIAS_SHORTCUT': {
+        const contact = await findByAlias(args?.alias ?? '');
+        if (!contact) {
+          // Alias not registered — fall through to CREATE_TASK logic
+          const newTask = await prisma.task.create({
+            data: { title: message_text, category: 'outros' },
+          });
+          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          break;
+        }
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: contact.phone,
+            body: args?.message ?? '',
+            status: 'AWAITING_APPROVAL',
+            metadata: { contactName: contact.name },
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.draft',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `Draft WhatsApp para ${contact.name} (${contact.phone}) via atalho ${args?.alias}`,
+          },
+        });
+        await savePending(sender_id, comm.id);
+        responseText = draftPreview(contact.name, args?.message ?? '');
+        break;
+      }
+
       case 'CREATE_TASK': {
+        // Try LLM classification before creating a task
+        const classification = await classifyIntent(args?.rawText ?? '');
+
+        if (classification.intent === 'REGISTER_ALIAS') {
+          try {
+            await addAlias(classification.contact_name, classification.alias);
+            responseText = `✅ Registrado! Agora *${classification.alias}* = ${classification.contact_name}.`;
+          } catch {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado. Cadastre-o primeiro.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'CREATE_CONTACT') {
+          const alias = '/' + classification.contact_name.toLowerCase().replace(/\s+/g, '');
+          try {
+            await createContact(classification.contact_name, classification.phone, [alias]);
+            responseText = `✅ Contato *${classification.contact_name}* criado! Use ${alias} <msg> para mandar mensagem.`;
+          } catch {
+            responseText = `❌ Não consegui criar o contato. Verifique se o nome já existe.`;
+          }
+          break;
+        }
+
         const newTask = await prisma.task.create({
           data: {
             title: args?.rawText || 'Sem título',
@@ -197,8 +277,87 @@ async function handleIncomingWhatsApp(
           responseText = `❌ "${args?.contactName}" não encontrado. Adicione em WHATSAPP_CONTACTS=nome:numero`;
           break;
         }
-        await sendWhatsApp(contact.phone, args?.message ?? '');
-        responseText = `✉️ Mensagem enviada para ${contact.name}`;
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: contact.phone,
+            body: args?.message ?? '',
+            status: 'AWAITING_APPROVAL',
+            metadata: { contactName: contact.name },
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.draft',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `Draft WhatsApp para ${contact.name} (${contact.phone})`,
+          },
+        });
+        await savePending(sender_id, comm.id);
+        responseText = draftPreview(contact.name, args?.message ?? '');
+        break;
+      }
+
+      case 'CONFIRM': {
+        const commId = args?.communication_id ?? await getPending(sender_id);
+        const comm = commId ? await prisma.communication.findUnique({ where: { id: commId } }) : null;
+        if (!comm) {
+          responseText = `❌ Solicitação não encontrada.`;
+          break;
+        }
+        if (comm.status !== 'AWAITING_APPROVAL') {
+          responseText = `⚠️ Esta mensagem já foi processada (${comm.status === 'SENT' ? 'enviada' : 'cancelada'}).`;
+          break;
+        }
+        await sendWhatsApp(comm.to!, comm.body!);
+        await prisma.communication.update({
+          where: { id: comm.id },
+          data: { status: 'SENT', approved_at: new Date() },
+        });
+        await clearPending(sender_id);
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.sent',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `WhatsApp enviado para ${comm.to}`,
+          },
+        });
+        const meta = comm.metadata as Record<string, string>;
+        responseText = `✉️ Enviado para ${meta?.contactName ?? comm.to}.`;
+        break;
+      }
+
+      case 'CANCEL': {
+        const commId = args?.communication_id ?? await getPending(sender_id);
+        const comm = commId ? await prisma.communication.findUnique({ where: { id: commId } }) : null;
+        if (!comm) {
+          responseText = `❌ Solicitação não encontrada.`;
+          break;
+        }
+        if (comm.status !== 'AWAITING_APPROVAL') {
+          responseText = `⚠️ Esta mensagem já foi processada.`;
+          break;
+        }
+        await prisma.communication.update({
+          where: { id: comm.id },
+          data: { status: 'CANCELLED' },
+        });
+        await clearPending(sender_id);
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.cancelled',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `WhatsApp cancelado para ${comm.to}`,
+          },
+        });
+        responseText = `🚫 Mensagem cancelada.`;
         break;
       }
 
@@ -226,6 +385,65 @@ router.post('/webhook/nanoclaw', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Webhook nanoclaw error:', err);
+    res.json({ ok: true });
+  }
+});
+
+// ── Baileys audio webhook ───────────────────────────────────────────────────
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) => {
+  try {
+    if (!validateToken(req.headers.authorization, process.env.BAILEYS_WEBHOOK_SECRET ?? '')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'campo audio ausente' });
+    }
+
+    const sender_id: string = req.body.sender_id ?? '';
+    const is_forwarded = req.body.is_forwarded === 'true';
+    const mimetype: string = req.body.mimetype ?? req.file.mimetype ?? 'audio/ogg; codecs=opus';
+
+    const text = await transcribeAudio(req.file.buffer, mimetype);
+
+    if (!text) {
+      await sendWhatsApp(sender_id, '🎙️ Não consegui entender o áudio. Tente novamente.');
+      return res.json({ ok: true });
+    }
+
+    let responseText: string;
+
+    if (is_forwarded) {
+      const suggestion = await suggestAction(text);
+      if (!suggestion) {
+        responseText = `🎙️ Transcrevi: "${text}"\n\nNão identifiquei uma ação clara. O que devo fazer com isso?`;
+        await sendWhatsApp(sender_id, responseText);
+      } else {
+        responseText = `🎙️ Áudio de terceiro: "${text}"\n\n💡 Sugestão: ${suggestion.title}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: sender_id,
+            body: suggestion.title,
+            status: 'AWAITING_APPROVAL',
+            metadata: { source: 'audio_forwarded', action: suggestion.action },
+          },
+        });
+        await savePending(sender_id, comm.id);
+        await sendWhatsApp(sender_id, responseText);
+      }
+    } else {
+      // Route through the full command pipeline — SEND_TO/ALIAS/task have their own confirm steps
+      const result = await handleIncomingWhatsApp(sender_id, text);
+      await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Webhook baileys-audio error:', err);
     res.json({ ok: true });
   }
 });

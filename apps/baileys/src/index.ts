@@ -4,15 +4,26 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   WASocket,
-} from '@whiskeysockets/baileys';
-import type { proto } from '@whiskeysockets/baileys';
+  downloadMediaMessage,
+} from 'baileys';
+import type { proto } from 'baileys';
 import axios from 'axios';
+import FormData from 'form-data';
 import express from 'express';
 import { readdirSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 
 // Message store for getMessage retries (Signal protocol re-encryption)
 const msgStore = new Map<string, proto.IMessage>();
+
+// Dedup: prevent processing the same message twice (WhatsApp sometimes re-delivers)
+const processedIds = new Set<string>();
+function markProcessed(id: string): boolean {
+  if (processedIds.has(id)) return false;
+  processedIds.add(id);
+  if (processedIds.size > 200) processedIds.delete(processedIds.values().next().value!);
+  return true;
+}
 function storeMsg(id: string | null | undefined, msg: proto.IMessage | null | undefined) {
   if (!id || !msg) return;
   msgStore.set(id, msg);
@@ -121,6 +132,15 @@ async function connect(): Promise<void> {
     }
   });
 
+  // ── ACK tracking (SERVER_ACK=1, DELIVERY_ACK=2, READ=3) ───────────────
+  sock.ev.on('messages.update', (updates) => {
+    for (const { key, update } of updates) {
+      if (key.fromMe && update.status !== undefined) {
+        console.log(`[ACK] jid=${key.remoteJid} id=${key.id?.slice(0, 8)} status=${update.status}`);
+      }
+    }
+  });
+
   // ── Incoming messages ──────────────────────────────────────────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     // Store all messages for getMessage retries (Signal protocol)
@@ -152,14 +172,60 @@ async function connect(): Promise<void> {
       const isOwnerSender = fromMe || participant.startsWith(OWNER_PHONE) || participant === selfChatJid;
       const isSelfChat = fromMe && remoteJid === selfChatJid;
       const isCommandGroup = !!commandGroupJid && remoteJid === commandGroupJid && isOwnerSender;
-      console.log(`[FILTER] isSelf=${isSelfChat} isGroup=${isCommandGroup} cmdJid="${commandGroupJid}" remoteJid="${remoteJid}" jidMatch=${remoteJid === commandGroupJid} isOwner=${isOwnerSender} participant="${participant}" selfChatJid="${selfChatJid}"`);
-      if (!isSelfChat && !isCommandGroup) continue;
+      // WhatsApp uses @lid (privacy-preserving local ID) for incoming DMs — cannot compare
+      // to OWNER_PHONE@s.whatsapp.net. Since the Elvis chip is private and dedicated,
+      // any non-group non-broadcast incoming DM is treated as an owner command.
+      const isOwnerDm = !fromMe && !remoteJid.endsWith('@g.us') && !remoteJid.endsWith('@broadcast');
+      console.log(`[FILTER] isSelf=${isSelfChat} isGroup=${isCommandGroup} isOwnerDm=${isOwnerDm} cmdJid="${commandGroupJid}" remoteJid="${remoteJid}" jidMatch=${remoteJid === commandGroupJid} isOwner=${isOwnerSender} participant="${participant}" selfChatJid="${selfChatJid}"`);
+      if (!isSelfChat && !isCommandGroup && !isOwnerDm) continue;
 
+      // ── Áudio (PTT ou audioMessage encaminhado) ──────────────────────────
+      const audioMsg = msg.message.audioMessage ?? msg.message.ptvMessage ?? null;
+      if (audioMsg) {
+        const msgId = msg.key.id ?? '';
+        if (!markProcessed(msgId)) {
+          console.log(`[Baileys] duplicata de áudio ignorada id=${msgId}`);
+          continue;
+        }
+        try {
+          const buffer = await downloadMediaMessage(msg, 'buffer', {});
+          const mimetype = audioMsg.mimetype ?? 'audio/ogg; codecs=opus';
+          const isForwarded = !!(
+            (msg.message.audioMessage as any)?.contextInfo?.isForwarded ??
+            (msg.message.ptvMessage as any)?.contextInfo?.isForwarded
+          );
+          const replyTo = remoteJid.endsWith('@g.us') ? remoteJid : OWNER_PHONE;
+
+          console.log(`[Baileys] áudio recebido — mimetype=${mimetype} forwarded=${isForwarded} size=${(buffer as Buffer).length}`);
+
+          const form = new FormData();
+          form.append('audio', buffer as Buffer, { filename: 'audio.ogg', contentType: mimetype });
+          form.append('sender_id', replyTo);
+          form.append('is_forwarded', String(isForwarded));
+          form.append('mimetype', mimetype);
+
+          await axios.post(`${ELVIS_API_URL}/webhook/baileys-audio`, form, {
+            headers: { ...form.getHeaders(), Authorization: `Bearer ${BAILEYS_WEBHOOK_SECRET}` },
+            timeout: 30_000,
+          });
+        } catch (err) {
+          console.error('[Baileys] Falha ao processar áudio:', err instanceof Error ? err.message : err);
+        }
+        continue;
+      }
+
+      // ── Texto ─────────────────────────────────────────────────────────────
       const text =
         msg.message.conversation ??
         msg.message.extendedTextMessage?.text ??
         '';
       if (!text.trim()) continue;
+
+      const msgId = msg.key.id ?? '';
+      if (!markProcessed(msgId)) {
+        console.log(`[Baileys] duplicata ignorada id=${msgId}`);
+        continue;
+      }
 
       console.log(`[Baileys] self-chat → "${text}"`);
 
@@ -195,6 +261,17 @@ app.get('/status', (_req, res) => {
   res.json({ connected, qr: qrCode ?? undefined });
 });
 
+// Diagnóstico: verifica se USyncQuery funciona para um número
+app.get('/check/:phone', async (req, res) => {
+  if (!sock || !connected) { res.status(503).json({ error: 'not connected' }); return; }
+  try {
+    const result = await sock.onWhatsApp(req.params.phone);
+    res.json({ result });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 app.post('/send', async (req, res) => {
   const { to, text } = req.body as { to?: string; text?: string };
   if (!to || !text) {
@@ -218,11 +295,25 @@ app.post('/send', async (req, res) => {
   try {
     // Groups (@g.us) and phone numbers work fine.
     // @lid cannot be used for sending — fallback to OWNER_PHONE.
+    // Brazilian numbers: WhatsApp may register without the 9th digit (e.g. 554191352141
+    // instead of 5541991352141). Resolve via onWhatsApp() to get the canonical JID.
     let jid: string;
     if (to.endsWith('@lid')) {
       jid = `${OWNER_PHONE}@s.whatsapp.net`;
+    } else if (to.includes('@')) {
+      jid = to;
     } else {
-      jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+      // Resolve canonical JID for phone numbers
+      try {
+        const results = await sock.onWhatsApp(to);
+        const resolved = results?.[0];
+        jid = resolved?.jid ?? `${to}@s.whatsapp.net`;
+        if (resolved?.jid && resolved.jid !== `${to}@s.whatsapp.net`) {
+          console.log(`[Baileys] JID resolvido: ${to} → ${resolved.jid}`);
+        }
+      } catch {
+        jid = `${to}@s.whatsapp.net`;
+      }
     }
     console.log(`[Baileys] /send → jid="${jid}" text="${text.substring(0, 50)}"`);
     const result = await sock.sendMessage(jid, { text });

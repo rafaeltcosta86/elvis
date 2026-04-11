@@ -9,6 +9,9 @@ export type Intent =
   | 'LESS_PROACTIVE'
   | 'RESET_PREFS'
   | 'SEND_TO'
+  | 'CONFIRM'
+  | 'CANCEL'
+  | 'ALIAS_SHORTCUT'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -19,6 +22,8 @@ export interface ParsedCommand {
     to?: string;
     contactName?: string;
     message?: string;
+    communication_id?: string;
+    alias?: string;
   };
 }
 
@@ -76,6 +81,30 @@ export function parseCommand(text: string): ParsedCommand {
     return { intent: 'RESET_PREFS' };
   }
 
+  // 1 ou /confirmar <id>
+  if (/^1$/.test(trimmed) || /^\/confirmar$/i.test(trimmed)) {
+    return { intent: 'CONFIRM', args: {} };
+  }
+  const confirmMatch = /^\/confirmar\s+(.+)$/i.exec(trimmed);
+  if (confirmMatch) {
+    return {
+      intent: 'CONFIRM',
+      args: { communication_id: confirmMatch[1].trim() },
+    };
+  }
+
+  // 2 ou /cancelar <id>
+  if (/^2$/.test(trimmed) || /^\/cancelar$/i.test(trimmed)) {
+    return { intent: 'CANCEL', args: {} };
+  }
+  const cancelMatch = /^\/cancelar\s+(.+)$/i.exec(trimmed);
+  if (cancelMatch) {
+    return {
+      intent: 'CANCEL',
+      args: { communication_id: cancelMatch[1].trim() },
+    };
+  }
+
   // manda para <nome>: <msg> | fala com <nome> que <msg> | avisa <nome>: <msg>
   const sendToMatch = /^(?:manda(?:r)? (?:para|pro|pra)|fala com|avisa) (.+?)(?::|,| que | dizendo ) (.+)$/i.exec(trimmed);
   if (sendToMatch) {
@@ -85,6 +114,15 @@ export function parseCommand(text: string): ParsedCommand {
         contactName: sendToMatch[1].trim(),
         message: sendToMatch[2].trim(),
       },
+    };
+  }
+
+  // /alias <mensagem> — atalho de contato (ex: /linic olá)
+  const aliasMatch = /^(\/\S+)\s+(.+)$/i.exec(trimmed);
+  if (aliasMatch) {
+    return {
+      intent: 'ALIAS_SHORTCUT',
+      args: { alias: aliasMatch[1].trim(), message: aliasMatch[2].trim() },
     };
   }
 
