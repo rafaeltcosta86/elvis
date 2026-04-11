@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { type Task } from '@prisma/client';
 import { parseCommand } from '../lib/commandParser';
 import { sendWhatsApp } from '../lib/nanoclawClient';
@@ -377,10 +377,14 @@ async function handleIncomingWhatsApp(
   return responseText;
 }
 
-// ── NanoClaw webhook ────────────────────────────────────────────────────────
-router.post('/webhook/nanoclaw', async (req, res) => {
+async function processWebhook(
+  req: Request,
+  res: Response,
+  provider: string,
+  secret: string
+) {
   try {
-    if (!validateToken(req.headers.authorization, process.env.WEBHOOK_SECRET ?? '')) {
+    if (!validateToken(req.headers.authorization, secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const { sender_id, message_text } = req.body;
@@ -390,9 +394,14 @@ router.post('/webhook/nanoclaw', async (req, res) => {
     await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Webhook nanoclaw error:', err);
+    console.error(`Webhook ${provider} error:`, err);
     res.json({ ok: true });
   }
+}
+
+// ── NanoClaw webhook ────────────────────────────────────────────────────────
+router.post('/webhook/nanoclaw', async (req, res) => {
+  await processWebhook(req, res, 'nanoclaw', process.env.WEBHOOK_SECRET ?? '');
 });
 
 // ── Baileys audio webhook ───────────────────────────────────────────────────
@@ -456,20 +465,12 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
 
 // ── Baileys webhook (internal — called by apps/baileys service) ─────────────
 router.post('/webhook/baileys', async (req, res) => {
-  try {
-    if (!validateToken(req.headers.authorization, process.env.BAILEYS_WEBHOOK_SECRET ?? '')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const { sender_id, message_text } = req.body;
-    if (!sender_id || !message_text) return res.json({ ok: true });
-
-    const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    await sendWhatsApp(sender_id, responseText);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Webhook baileys error:', err);
-    res.json({ ok: true });
-  }
+  await processWebhook(
+    req,
+    res,
+    'baileys',
+    process.env.BAILEYS_WEBHOOK_SECRET ?? ''
+  );
 });
 
 export default router;
