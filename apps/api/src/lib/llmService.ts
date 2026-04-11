@@ -60,6 +60,50 @@ export async function suggestAction(text: string): Promise<SuggestedAction> {
   }
 }
 
+const PROMPT_NORMALIZE_SYSTEM = `Você converte transcrições de áudio em comandos estruturados para o assistente Elvis.
+
+Regras:
+- Se o usuário quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem limpa>"
+  - Remova palavras de preenchimento: "um", "uma", "só", "lá", "aí", "né"
+  - Exemplos:
+    - "Manda um oi pra Amanda" → "manda para Amanda: oi"
+    - "Fala pra João que eu chego às 18h" → "manda para João: chego às 18h"
+    - "Manda uma mensagem pra Linic dizendo obrigado" → "manda para Linic: obrigado"
+- Para qualquer outro tipo de comando (criar tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo, sem verbos de instrução como "lembra de", "precisa de", etc.
+  - "Lembra de comprar pão amanhã" → "comprar pão amanhã"
+  - "Preciso ligar pra dentista" → "ligar pra dentista"
+- Responda APENAS com o comando normalizado. Nenhum texto adicional.`;
+
+export async function normalizeAudioCommand(text: string): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return text;
+
+  try {
+    const res = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: PROMPT_NORMALIZE_SYSTEM },
+          { role: 'user', content: text },
+        ],
+        temperature: 0,
+        max_tokens: 100,
+      }),
+    });
+
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const normalized = (data?.choices?.[0]?.message?.content ?? '').trim();
+    return normalized || text;
+  } catch {
+    return text;
+  }
+}
+
 export async function classifyIntent(text: string): Promise<LLMClassification> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return { intent: 'UNKNOWN' };

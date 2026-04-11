@@ -20,6 +20,7 @@ vi.mock('../../lib/whisperService', () => ({
 vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
+  normalizeAudioCommand: vi.fn((text: string) => Promise.resolve(text)),
 }));
 
 vi.mock('../../lib/redis', () => ({

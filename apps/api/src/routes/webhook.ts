@@ -8,7 +8,7 @@ import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
 import { findByAlias, findByName, addAlias, createContact } from '../lib/contactService';
-import { classifyIntent, suggestAction } from '../lib/llmService';
+import { classifyIntent, suggestAction, normalizeAudioCommand } from '../lib/llmService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
 import redis from '../lib/redis';
@@ -451,8 +451,9 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
         await sendWhatsApp(sender_id, responseText);
       }
     } else {
-      // Route through the full command pipeline — SEND_TO/ALIAS/task have their own confirm steps
-      const result = await handleIncomingWhatsApp(sender_id, text);
+      // Normalize natural language before routing through the full command pipeline
+      const normalized = await normalizeAudioCommand(text);
+      const result = await handleIncomingWhatsApp(sender_id, normalized);
       await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
     }
 
