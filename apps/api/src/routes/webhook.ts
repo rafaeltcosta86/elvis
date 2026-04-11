@@ -7,9 +7,29 @@ import { addDays, nextMonday } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
+import { findByAlias, addAlias, createContact } from '../lib/contactService';
+import { classifyIntent } from '../lib/llmService';
+import redis from '../lib/redis';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
+const PENDING_TTL = 600; // 10 minutos
+
+async function savePending(senderId: string, commId: string): Promise<void> {
+  await redis.set(`pending:${senderId}`, commId, 'EX', PENDING_TTL);
+}
+
+async function getPending(senderId: string): Promise<string | null> {
+  return redis.get(`pending:${senderId}`);
+}
+
+async function clearPending(senderId: string): Promise<void> {
+  await redis.del(`pending:${senderId}`);
+}
+
+function draftPreview(contactName: string, message: string): string {
+  return `📋 Vou mandar para *${contactName}*:\n"${message}"\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+}
 
 // Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
 function parseContacts(raw: string): Array<{ name: string; phone: string }> {
@@ -150,7 +170,65 @@ async function handleIncomingWhatsApp(
         break;
       }
 
+      case 'ALIAS_SHORTCUT': {
+        const contact = await findByAlias(args?.alias ?? '');
+        if (!contact) {
+          // Alias not registered — fall through to CREATE_TASK logic
+          const newTask = await prisma.task.create({
+            data: { title: message_text, category: 'outros' },
+          });
+          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          break;
+        }
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: contact.phone,
+            body: args?.message ?? '',
+            status: 'AWAITING_APPROVAL',
+            metadata: { contactName: contact.name },
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.draft',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `Draft WhatsApp para ${contact.name} (${contact.phone}) via atalho ${args?.alias}`,
+          },
+        });
+        await savePending(sender_id, comm.id);
+        responseText = draftPreview(contact.name, args?.message ?? '');
+        break;
+      }
+
       case 'CREATE_TASK': {
+        // Try LLM classification before creating a task
+        const classification = await classifyIntent(args?.rawText ?? '');
+
+        if (classification.intent === 'REGISTER_ALIAS') {
+          try {
+            await addAlias(classification.contact_name, classification.alias);
+            responseText = `✅ Registrado! Agora *${classification.alias}* = ${classification.contact_name}.`;
+          } catch {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado. Cadastre-o primeiro.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'CREATE_CONTACT') {
+          const alias = '/' + classification.contact_name.toLowerCase().replace(/\s+/g, '');
+          try {
+            await createContact(classification.contact_name, classification.phone, [alias]);
+            responseText = `✅ Contato *${classification.contact_name}* criado! Use ${alias} <msg> para mandar mensagem.`;
+          } catch {
+            responseText = `❌ Não consegui criar o contato. Verifique se o nome já existe.`;
+          }
+          break;
+        }
+
         const newTask = await prisma.task.create({
           data: {
             title: args?.rawText || 'Sem título',
@@ -197,8 +275,87 @@ async function handleIncomingWhatsApp(
           responseText = `❌ "${args?.contactName}" não encontrado. Adicione em WHATSAPP_CONTACTS=nome:numero`;
           break;
         }
-        await sendWhatsApp(contact.phone, args?.message ?? '');
-        responseText = `✉️ Mensagem enviada para ${contact.name}`;
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: contact.phone,
+            body: args?.message ?? '',
+            status: 'AWAITING_APPROVAL',
+            metadata: { contactName: contact.name },
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.draft',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `Draft WhatsApp para ${contact.name} (${contact.phone})`,
+          },
+        });
+        await savePending(sender_id, comm.id);
+        responseText = draftPreview(contact.name, args?.message ?? '');
+        break;
+      }
+
+      case 'CONFIRM': {
+        const commId = args?.communication_id ?? await getPending(sender_id);
+        const comm = commId ? await prisma.communication.findUnique({ where: { id: commId } }) : null;
+        if (!comm) {
+          responseText = `❌ Solicitação não encontrada.`;
+          break;
+        }
+        if (comm.status !== 'AWAITING_APPROVAL') {
+          responseText = `⚠️ Esta mensagem já foi processada (${comm.status === 'SENT' ? 'enviada' : 'cancelada'}).`;
+          break;
+        }
+        await sendWhatsApp(comm.to!, comm.body!);
+        await prisma.communication.update({
+          where: { id: comm.id },
+          data: { status: 'SENT', approved_at: new Date() },
+        });
+        await clearPending(sender_id);
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.sent',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `WhatsApp enviado para ${comm.to}`,
+          },
+        });
+        const meta = comm.metadata as Record<string, string>;
+        responseText = `✉️ Enviado para ${meta?.contactName ?? comm.to}.`;
+        break;
+      }
+
+      case 'CANCEL': {
+        const commId = args?.communication_id ?? await getPending(sender_id);
+        const comm = commId ? await prisma.communication.findUnique({ where: { id: commId } }) : null;
+        if (!comm) {
+          responseText = `❌ Solicitação não encontrada.`;
+          break;
+        }
+        if (comm.status !== 'AWAITING_APPROVAL') {
+          responseText = `⚠️ Esta mensagem já foi processada.`;
+          break;
+        }
+        await prisma.communication.update({
+          where: { id: comm.id },
+          data: { status: 'CANCELLED' },
+        });
+        await clearPending(sender_id);
+        await prisma.auditLog.create({
+          data: {
+            actor: 'user',
+            action: 'whatsapp.cancelled',
+            entity_type: 'Communication',
+            entity_id: comm.id,
+            summary: `WhatsApp cancelado para ${comm.to}`,
+          },
+        });
+        responseText = `🚫 Mensagem cancelada.`;
         break;
       }
 

@@ -129,6 +129,16 @@ model OAuthToken {
   updated_at           DateTime      @updatedAt
 }
 
+model Contact {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  phone      String
+  aliases    String[]
+  created_at DateTime @default(now())
+
+  @@index([aliases])
+}
+
 model AuditLog {
   id          String   @id @default(uuid())
   ts          DateTime @default(now())
