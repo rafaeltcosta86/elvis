@@ -8,7 +8,9 @@ import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
 import { findByAlias, addAlias, createContact } from '../lib/contactService';
-import { classifyIntent } from '../lib/llmService';
+import { classifyIntent, suggestAction } from '../lib/llmService';
+import { transcribeAudio } from '../lib/whisperService';
+import multer from 'multer';
 import redis from '../lib/redis';
 
 const router = Router();
@@ -383,6 +385,76 @@ router.post('/webhook/nanoclaw', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Webhook nanoclaw error:', err);
+    res.json({ ok: true });
+  }
+});
+
+// ── Baileys audio webhook ───────────────────────────────────────────────────
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) => {
+  try {
+    if (!validateToken(req.headers.authorization, process.env.BAILEYS_WEBHOOK_SECRET ?? '')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'campo audio ausente' });
+    }
+
+    const sender_id: string = req.body.sender_id ?? '';
+    const is_forwarded = req.body.is_forwarded === 'true';
+    const mimetype: string = req.body.mimetype ?? req.file.mimetype ?? 'audio/ogg; codecs=opus';
+
+    const text = await transcribeAudio(req.file.buffer, mimetype);
+
+    if (!text) {
+      await sendWhatsApp(sender_id, '🎙️ Não consegui entender o áudio. Tente novamente.');
+      return res.json({ ok: true });
+    }
+
+    let responseText: string;
+
+    if (is_forwarded) {
+      const suggestion = await suggestAction(text);
+      if (!suggestion) {
+        responseText = `🎙️ Transcrevi: "${text}"\n\nNão identifiquei uma ação clara. O que devo fazer com isso?`;
+        await sendWhatsApp(sender_id, responseText);
+      } else {
+        responseText = `🎙️ Áudio de terceiro: "${text}"\n\n💡 Sugestão: ${suggestion.title}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'DRAFT',
+            to: sender_id,
+            body: suggestion.title,
+            status: 'AWAITING_APPROVAL',
+            metadata: { source: 'audio_forwarded', action: suggestion.action },
+          },
+        });
+        await savePending(sender_id, comm.id);
+        await sendWhatsApp(sender_id, responseText);
+      }
+    } else {
+      const classification = await classifyIntent(text);
+      responseText = `🎙️ Entendi: "${text}"\n\n📋 ${classification.intent !== 'UNKNOWN' ? 'Vou executar: ' + text : 'Vou criar a tarefa: ' + text}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+      const comm = await prisma.communication.create({
+        data: {
+          provider: 'WHATSAPP',
+          type: 'DRAFT',
+          to: sender_id,
+          body: text,
+          status: 'AWAITING_APPROVAL',
+          metadata: { source: 'audio_command', classification },
+        },
+      });
+      await savePending(sender_id, comm.id);
+      await sendWhatsApp(sender_id, responseText);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Webhook baileys-audio error:', err);
     res.json({ ok: true });
   }
 });

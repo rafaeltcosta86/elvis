@@ -17,6 +17,49 @@ Analise a mensagem e retorne JSON com UMA destas estruturas:
 
 Responda APENAS com o JSON, sem texto adicional.`;
 
+export type SuggestedAction = { action: string; title: string } | null;
+
+const PROMPT_SUGGEST_SYSTEM = `Você é um assistente pessoal chamado Elvis. Receberá a transcrição de um áudio enviado por um terceiro.
+Analise o conteúdo e retorne JSON com a ação sugerida:
+
+- Se identificar uma ação clara: {"action":"<tipo de ação, ex: criar tarefa, agendar reunião>","title":"<descrição curta da tarefa>"}
+- Se não identificar ação clara: {"action":"UNKNOWN"}
+
+Responda APENAS com o JSON, sem texto adicional.`;
+
+export async function suggestAction(text: string): Promise<SuggestedAction> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: PROMPT_SUGGEST_SYSTEM },
+          { role: 'user', content: text },
+        ],
+        temperature: 0,
+        max_tokens: 100,
+      }),
+    });
+
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content: string = data?.choices?.[0]?.message?.content ?? '';
+    const parsed = JSON.parse(content);
+
+    if (parsed.action === 'UNKNOWN' || !parsed.action || !parsed.title) return null;
+    return { action: parsed.action, title: parsed.title };
+  } catch {
+    return null;
+  }
+}
+
 export async function classifyIntent(text: string): Promise<LLMClassification> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return { intent: 'UNKNOWN' };

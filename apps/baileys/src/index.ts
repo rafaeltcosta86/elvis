@@ -4,9 +4,11 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   WASocket,
+  downloadMediaMessage,
 } from 'baileys';
 import type { proto } from 'baileys';
 import axios from 'axios';
+import FormData from 'form-data';
 import express from 'express';
 import { readdirSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -177,6 +179,42 @@ async function connect(): Promise<void> {
       console.log(`[FILTER] isSelf=${isSelfChat} isGroup=${isCommandGroup} isOwnerDm=${isOwnerDm} cmdJid="${commandGroupJid}" remoteJid="${remoteJid}" jidMatch=${remoteJid === commandGroupJid} isOwner=${isOwnerSender} participant="${participant}" selfChatJid="${selfChatJid}"`);
       if (!isSelfChat && !isCommandGroup && !isOwnerDm) continue;
 
+      // ── Áudio (PTT ou audioMessage encaminhado) ──────────────────────────
+      const audioMsg = msg.message.audioMessage ?? msg.message.ptvMessage ?? null;
+      if (audioMsg) {
+        const msgId = msg.key.id ?? '';
+        if (!markProcessed(msgId)) {
+          console.log(`[Baileys] duplicata de áudio ignorada id=${msgId}`);
+          continue;
+        }
+        try {
+          const buffer = await downloadMediaMessage(msg, 'buffer', {});
+          const mimetype = audioMsg.mimetype ?? 'audio/ogg; codecs=opus';
+          const isForwarded = !!(
+            (msg.message.audioMessage as any)?.contextInfo?.isForwarded ??
+            (msg.message.ptvMessage as any)?.contextInfo?.isForwarded
+          );
+          const replyTo = remoteJid.endsWith('@g.us') ? remoteJid : OWNER_PHONE;
+
+          console.log(`[Baileys] áudio recebido — mimetype=${mimetype} forwarded=${isForwarded} size=${(buffer as Buffer).length}`);
+
+          const form = new FormData();
+          form.append('audio', buffer as Buffer, { filename: 'audio.ogg', contentType: mimetype });
+          form.append('sender_id', replyTo);
+          form.append('is_forwarded', String(isForwarded));
+          form.append('mimetype', mimetype);
+
+          await axios.post(`${ELVIS_API_URL}/webhook/baileys-audio`, form, {
+            headers: { ...form.getHeaders(), Authorization: `Bearer ${BAILEYS_WEBHOOK_SECRET}` },
+            timeout: 30_000,
+          });
+        } catch (err) {
+          console.error('[Baileys] Falha ao processar áudio:', err instanceof Error ? err.message : err);
+        }
+        continue;
+      }
+
+      // ── Texto ─────────────────────────────────────────────────────────────
       const text =
         msg.message.conversation ??
         msg.message.extendedTextMessage?.text ??

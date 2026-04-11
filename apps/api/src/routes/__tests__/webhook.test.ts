@@ -43,6 +43,11 @@ vi.mock('../../lib/contactService', () => ({
 
 vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
+  suggestAction: vi.fn(),
+}));
+
+vi.mock('../../lib/redis', () => ({
+  default: { set: vi.fn().mockResolvedValue('OK'), get: vi.fn().mockResolvedValue(null), del: vi.fn().mockResolvedValue(1) },
 }));
 
 import webhookRouter from '../webhook';
@@ -154,7 +159,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
     );
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('Linic');
-    expect(sentText).toContain('/confirmar');
+    expect(sentText).toContain('1️⃣');
   });
 
   it('falls through to CREATE_TASK when alias is not found', async () => {
@@ -260,8 +265,8 @@ describe('Webhook — SEND_TO (approval gate)', () => {
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('assistente');
     expect(sentText).toContain('olá tudo bem');
-    expect(sentText).toContain('/confirmar');
-    expect(sentText).toContain('/cancelar');
+    expect(sentText).toContain('1️⃣');
+    expect(sentText).toContain('2️⃣');
   });
 
   it('replies with error if contact is not found', async () => {
@@ -303,7 +308,7 @@ describe('Webhook — CONFIRM intent', () => {
     const sentText: string = (sendWhatsApp as any).mock.calls.find(
       ([to]: [string]) => to === '551199999999'
     )?.[1];
-    expect(sentText).toContain('enviada');
+    expect(sentText).toContain('Enviado para');
   });
 
   it('replies with error if communication_id not found on confirm', async () => {
