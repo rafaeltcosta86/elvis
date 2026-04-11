@@ -67,7 +67,7 @@ async function handleIncomingWhatsApp(
             ? top3.map((t) => `• ${t.title}`).join('\n')
             : '(nenhuma)';
 
-        responseText = `📅 Resumo do dia:\n• ${overdue.length} atrasados\n• ${urgent.length} urgentes\n\nTop 3:\n${topText}`;
+        responseText = `✅ Entendi: Resumo do dia solicitado.\n\n📅 Status:\n• ${overdue.length} atrasados\n• ${urgent.length} urgentes\n\nTop 3:\n${topText}\n\nPróximo passo: Resolver os itens atrasados ou adiar para amanhã.`;
         break;
       }
 
@@ -91,7 +91,7 @@ async function handleIncomingWhatsApp(
           data: { status: 'DONE' },
         });
 
-        responseText = `✅ Entendi: Tarefa "${task.title}" marcada como pronta!`;
+        responseText = `✅ Entendi: Marcar tarefa "${task.title}" como concluída.\n\n✨ Feito: Tarefa ${args.taskId} agora está com status DONE.\n\nPróximo passo: Deseja ver o resumo do que falta para hoje? (/hoje)`;
         break;
       }
 
@@ -127,12 +127,12 @@ async function handleIncomingWhatsApp(
           data: { due_at: newDueAt, status: 'PENDING' },
         });
 
-        responseText = `⏭️  Entendi: Tarefa adiada para ${newDueAt.toLocaleDateString()}`;
+        responseText = `✅ Entendi: Adiar tarefa "${task.title}" para ${newDueAt.toLocaleDateString()}.\n\n⏭️  Feito: Data de entrega atualizada.\n\nPróximo passo: Posso te ajudar com mais alguma tarefa?`;
         break;
       }
 
       case 'WEEK': {
-        responseText = '📅 Integração de calendário em breve!';
+        responseText = '✅ Entendi: Você quer ver sua agenda da semana.\n\n📅 Feito: Busquei seus compromissos (Integração em breve!)\n\nPróximo passo: Tente /hoje para ver as tarefas urgentes.';
         break;
       }
 
@@ -140,12 +140,14 @@ async function handleIncomingWhatsApp(
         const summary = await getEmailSummary().catch(() => null);
         if (!summary) {
           responseText =
-            '📧 Não consegui buscar seus e-mails agora. Configure o OAuth ou tente novamente.';
+            '❌ Entendi: Você quer o resumo de e-mails.\n\n📧 Erro: Não consegui buscar seus e-mails agora. Configure o OAuth ou tente novamente.\n\nPróximo passo: Verifique suas credenciais em /user/profile.';
         } else {
           responseText =
+            `✅ Entendi: Resumo de e-mails solicitado.\n\n` +
             `📧 E-mails de hoje:\n` +
-            `Outlook: ${summary.outlook.important.length} importantes / ${summary.outlook.total} total\n` +
-            `Gmail: ${summary.gmail.important.length} importante(s) / ${summary.gmail.total} total`;
+            `• Outlook: ${summary.outlook.important.length} importantes / ${summary.outlook.total} total\n` +
+            `• Gmail: ${summary.gmail.important.length} importante(s) / ${summary.gmail.total} total\n\n` +
+            `Próximo passo: Deseja que eu gere rascunhos para as mensagens importantes?`;
         }
         break;
       }
@@ -158,7 +160,7 @@ async function handleIncomingWhatsApp(
           },
         });
 
-        responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+        responseText = `✅ Entendi: Criar nova tarefa "${args?.rawText}".\n\n✨ Feito: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPróximo passo: Precisa de data? Use: /adiar ${newTask.id.substring(0, 8)} tomorrow`;
         break;
       }
 
@@ -166,7 +168,7 @@ async function handleIncomingWhatsApp(
         const profile = await getOrCreateProfile();
         const newLevel = Math.min(5, profile.proactivity_level + 1);
         await prisma.userProfile.update({ where: { id: profile.id }, data: { proactivity_level: newLevel } });
-        responseText = `✅ Entendi! Vou ser mais proativo. Nível atual: ${newLevel}/5`;
+        responseText = `✅ Entendi: Aumentar proatividade.\n\n🚀 Feito: Vou ser mais proativo. Nível atual: ${newLevel}/5\n\nPróximo passo: Posso sugerir um planejamento para amanhã à noite?`;
         break;
       }
 
@@ -174,7 +176,7 @@ async function handleIncomingWhatsApp(
         const profile = await getOrCreateProfile();
         const newLevel = Math.max(1, profile.proactivity_level - 1);
         await prisma.userProfile.update({ where: { id: profile.id }, data: { proactivity_level: newLevel } });
-        responseText = `✅ Entendi! Vou ser menos insistente. Nível atual: ${newLevel}/5`;
+        responseText = `✅ Entendi: Reduzir proatividade.\n\n🧘 Feito: Vou ser menos insistente. Nível atual: ${newLevel}/5\n\nPróximo passo: Se eu estiver incomodando, você pode baixar para o nível 1.`;
         break;
       }
 
@@ -184,7 +186,7 @@ async function handleIncomingWhatsApp(
           where: { id: profile.id },
           data: { inferred_prefs: {}, confidence: {} },
         });
-        responseText = '🔄 Preferências resetadas. Vou aprender seus hábitos do zero.';
+        responseText = '✅ Entendi: Resetar preferências.\n\n🔄 Feito: Preferências resetadas. Vou aprender seus hábitos do zero.\n\nPróximo passo: Continue usando normalmente para eu reaprender.';
         break;
       }
 
@@ -194,17 +196,53 @@ async function handleIncomingWhatsApp(
           (c) => c.name.toLowerCase() === (args?.contactName ?? '').toLowerCase()
         );
         if (!contact) {
-          responseText = `❌ "${args?.contactName}" não encontrado. Adicione em WHATSAPP_CONTACTS=nome:numero`;
+          responseText = `✅ Entendi: Você quer mandar uma mensagem para "${args?.contactName}".\n\n❌ Erro: "${args?.contactName}" não encontrado nos contatos.\n\nPróximo passo: Adicione-o na variável WHATSAPP_CONTACTS=nome:numero.`;
           break;
         }
-        await sendWhatsApp(contact.phone, args?.message ?? '');
-        responseText = `✉️ Mensagem enviada para ${contact.name}`;
+
+        const comm = await prisma.communication.create({
+          data: {
+            provider: 'WHATSAPP',
+            type: 'SEND',
+            to: contact.phone,
+            body: args?.message ?? '',
+            status: 'AWAITING_APPROVAL',
+            metadata: { contactName: contact.name, sender_id }
+          }
+        });
+
+        responseText = `✅ Entendi: Enviar para ${contact.name}: "${args?.message}"\n\n⚠️  Aguardando: Esta é uma escrita externa. Digite "CONFIRMAR" para enviar.\n\nPróximo passo: Aguardo sua confirmação para prosseguir. (ID: ${comm.id.substring(0,8)})`;
+        break;
+      }
+
+      case 'APPROVE': {
+        const pending = await prisma.communication.findFirst({
+          where: {
+            status: 'AWAITING_APPROVAL',
+            provider: 'WHATSAPP',
+            metadata: { path: ['sender_id'], equals: sender_id }
+          },
+          orderBy: { created_at: 'desc' }
+        });
+
+        if (!pending) {
+          responseText = '✅ Entendi: Você quer confirmar uma ação.\n\n❓ Atenção: Não encontrei nenhuma ação aguardando aprovação.\n\nPróximo passo: Tente enviar uma nova mensagem para alguém.';
+          break;
+        }
+
+        await sendWhatsApp(pending.to!, pending.body!);
+        await prisma.communication.update({
+          where: { id: pending.id },
+          data: { status: 'SENT', approved_at: new Date() }
+        });
+
+        responseText = `✅ Entendi: Confirmar envio para ${(pending.metadata as any)?.contactName ?? pending.to}.\n\n✉️  Feito: Mensagem enviada com sucesso!\n\nPróximo passo: Algo mais que eu possa fazer?`;
         break;
       }
 
       case 'UNKNOWN': {
         responseText =
-          'Não entendi. Comandos:\n/hoje — resumo\n/done <id> — pronto\n/adiar <id> tomorrow — adiar\n/semana — semana\n/email — e-mails\nmanda para <nome>: <msg>';
+          '✅ Entendi: Você enviou um comando.\n\n❓ Atenção: Não entendi o que deseja. Comandos disponíveis:\n• /hoje — resumo do dia\n• /done <id> — marcar como pronto\n• /adiar <id> tomorrow — adiar tarefa\n• /semana — agenda da semana\n• /email — resumo de e-mails\n• manda para <nome>: <msg>\n\nPróximo passo: Digite um dos comandos acima para continuar.';
         break;
       }
     }

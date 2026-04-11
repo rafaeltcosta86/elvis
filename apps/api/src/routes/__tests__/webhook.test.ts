@@ -15,6 +15,11 @@ vi.mock('../../lib/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    communication: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
     auditLog: {
       findMany: vi.fn(),
     },
@@ -60,6 +65,9 @@ describe('Webhook — proactivity commands', () => {
     process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
     (prisma.userProfile.findFirst as any).mockResolvedValue(baseProfile);
     (prisma.userProfile.update as any).mockResolvedValue({ ...baseProfile, proactivity_level: 4 });
+    (prisma.communication.create as any).mockResolvedValue({ id: 'c1' });
+    (prisma.communication.findFirst as any).mockResolvedValue({ id: 'c1', to: '123', body: 'msg', metadata: { contactName: 'John' } });
+    (prisma.communication.update as any).mockResolvedValue({});
     (sendWhatsApp as any).mockResolvedValue(undefined);
   });
 
@@ -89,7 +97,48 @@ describe('Webhook — proactivity commands', () => {
     await webhookPost('/corrigir');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Entendi');
     expect(sentText).toContain('resetadas');
+    expect(sentText).toContain('Próximo passo');
+  });
+
+  it('SEND_TO command creates a pending communication and asks for confirmation', async () => {
+    process.env.WHATSAPP_CONTACTS = 'John:123456';
+    (prisma.communication.create as any).mockResolvedValue({ id: 'comm-123' });
+
+    await webhookPost('manda para John: Ola');
+
+    expect(prisma.communication.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'AWAITING_APPROVAL',
+        to: '123456',
+        body: 'Ola'
+      })
+    }));
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Aguardando');
+    expect(sentText).toContain('CONFIRMAR');
+  });
+
+  it('APPROVE command sends the pending message', async () => {
+    (prisma.communication.findFirst as any).mockResolvedValue({
+      id: 'c1',
+      to: '123456',
+      body: 'Ola John',
+      metadata: { contactName: 'John' }
+    });
+
+    await webhookPost('CONFIRMAR');
+
+    expect(sendWhatsApp).toHaveBeenCalledWith('123456', 'Ola John');
+    expect(prisma.communication.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'c1' },
+      data: expect.objectContaining({ status: 'SENT' })
+    }));
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[1][1];
+    expect(sentText).toContain('sucesso');
   });
 
   it('returns 200 for proactivity commands', async () => {
@@ -98,6 +147,42 @@ describe('Webhook — proactivity commands', () => {
     const res = await webhookPost('/mais-proativo');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+});
+
+describe('Webhook — provider routes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = 'secret-nanoclaw';
+    process.env.BAILEYS_WEBHOOK_SECRET = 'secret-baileys';
+    (prisma.userProfile.findFirst as any).mockResolvedValue(baseProfile);
+  });
+
+  it('POST /webhook/nanoclaw validates with WEBHOOK_SECRET', async () => {
+    const res = await request(app)
+      .post('/webhook/nanoclaw')
+      .set('Authorization', 'Bearer secret-nanoclaw')
+      .send({ sender_id: '123', message_text: '/hoje' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('POST /webhook/baileys validates with BAILEYS_WEBHOOK_SECRET', async () => {
+    const res = await request(app)
+      .post('/webhook/baileys')
+      .set('Authorization', 'Bearer secret-baileys')
+      .send({ sender_id: '123', message_text: '/hoje' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('POST /webhook/nanoclaw returns 401 for invalid token', async () => {
+    const res = await request(app)
+      .post('/webhook/nanoclaw')
+      .set('Authorization', 'Bearer wrong-secret')
+      .send({ sender_id: '123', message_text: '/hoje' });
+
+    expect(res.status).toBe(401);
   });
 });
 

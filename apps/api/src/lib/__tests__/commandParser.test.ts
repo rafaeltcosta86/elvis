@@ -63,4 +63,18 @@ describe('parseCommand', () => {
       });
     });
   });
+
+  describe('APPROVE', () => {
+    it('returns APPROVE intent for confirmar', () => {
+      expect(parseCommand('confirmar')).toEqual({ intent: 'APPROVE' });
+    });
+
+    it('returns APPROVE intent for ok', () => {
+      expect(parseCommand('ok')).toEqual({ intent: 'APPROVE' });
+    });
+
+    it('returns APPROVE intent for /confirmar', () => {
+      expect(parseCommand('/confirmar')).toEqual({ intent: 'APPROVE' });
+    });
+  });
 });

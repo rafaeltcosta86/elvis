@@ -9,6 +9,7 @@ export type Intent =
   | 'LESS_PROACTIVE'
   | 'RESET_PREFS'
   | 'SEND_TO'
+  | 'APPROVE'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -49,6 +50,11 @@ export function parseCommand(text: string): ParsedCommand {
         to: postponeMatch[2].trim(),
       },
     };
+  }
+
+  // CONFIRMAR | OK | /confirmar
+  if (/^(?:confirmar|ok|\/confirmar)$/i.test(trimmed)) {
+    return { intent: 'APPROVE' };
   }
 
   // /semana
