@@ -60,19 +60,24 @@ export async function suggestAction(text: string): Promise<SuggestedAction> {
   }
 }
 
-const PROMPT_NORMALIZE_SYSTEM = `Você converte transcrições de áudio em comandos estruturados para o assistente Elvis.
+const PROMPT_NORMALIZE_SYSTEM = `Você é o assistente Elvis. Converte transcrições de áudio do dono em comandos estruturados.
 
-Regras:
-- Se o usuário quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem limpa>"
-  - Remova palavras de preenchimento: "um", "uma", "só", "lá", "aí", "né"
-  - Exemplos:
-    - "Manda um oi pra Amanda" → "manda para Amanda: oi"
-    - "Fala pra João que eu chego às 18h" → "manda para João: chego às 18h"
-    - "Manda uma mensagem pra Linic dizendo obrigado" → "manda para Linic: obrigado"
-- Para qualquer outro tipo de comando (criar tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo, sem verbos de instrução como "lembra de", "precisa de", etc.
-  - "Lembra de comprar pão amanhã" → "comprar pão amanhã"
-  - "Preciso ligar pra dentista" → "ligar pra dentista"
-- Responda APENAS com o comando normalizado. Nenhum texto adicional.`;
+Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
+  IMPORTANTE — reformule a mensagem na perspectiva de quem vai receber:
+  - Troque "eu" → "seu pai" / "ele" conforme o contexto
+  - Troque "dela" / "seu" → "seu" / "teu" dirigindo-se ao destinatário
+  - Se o dono pedir para "avisar que eu disse" ou "falar que fui eu": inclua "Seu pai pediu pra avisar:" no início
+  - A mensagem final deve fazer sentido para quem a recebe, como se fosse enviada diretamente
+  Exemplos:
+    "Manda um oi pra Amanda" → "manda para Amanda: oi"
+    "Diga para Estela que o RG dela está na casa da Karen" → "manda para Estela: seu RG está na casa da Karen"
+    "Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen" → "manda para Estela: seu pai pediu pra avisar: seu RG está na casa da Karen"
+    "Fala pra João que eu chego às 18h" → "manda para João: seu pai chega às 18h"
+
+Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
+  "Lembra de comprar pão amanhã" → "comprar pão amanhã"
+
+Responda APENAS com o comando normalizado. Nenhum texto adicional.`;
 
 export async function normalizeAudioCommand(text: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
