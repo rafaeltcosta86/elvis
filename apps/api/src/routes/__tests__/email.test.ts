@@ -14,8 +14,8 @@ vi.mock('../../lib/gmailClient', () => ({
   createGmailClient: vi.fn(),
 }));
 
-vi.mock('../../lib/prisma', () => ({
-  default: {
+vi.mock('../../lib/prisma', () => {
+  const mockPrisma = {
     communication: {
       create: vi.fn(),
       findUnique: vi.fn(),
@@ -24,8 +24,18 @@ vi.mock('../../lib/prisma', () => ({
     auditLog: {
       create: vi.fn(),
     },
-  },
-}));
+    $transaction: vi.fn().mockImplementation(async (arg) => {
+      if (Array.isArray(arg)) {
+        return Promise.all(arg);
+      }
+      if (typeof arg === 'function') {
+        return arg(mockPrisma);
+      }
+      return arg;
+    }),
+  };
+  return { default: mockPrisma };
+});
 
 import emailRouter from '../email';
 import { getEmailSummary } from '../../lib/emailService';

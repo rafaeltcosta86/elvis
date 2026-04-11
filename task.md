@@ -350,3 +350,4 @@ pnpm lint && pnpm build
 | 2026-03-20 | Bloco 32 [COWORK] concluído: scripts/backup.sh + scripts/restore.sh + scripts/smoke-test.sh + scripts/deploy.sh |
 | 2026-03-20 | Bloco 33 [COWORK] concluído: alertService.ts (job failures + queue health) + scheduler queueHealthCheck hourly + 7 testes worker — **143 API + 18 worker testes** |
 | 2026-03-20 | Bloco 34 [COWORK] concluído: .env.prod.example + infra/OPERATIONS.md + .gitignore — **M9 completo** ✅ |
+| 2026-04-10 | Perf [COWORK]: Otimização de updates sequenciais no DB via prisma.$transaction em /email/send e /email/draft |
