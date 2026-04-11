@@ -35,4 +35,11 @@ if [ -f "$ROADMAP" ]; then
   echo ""
 fi
 
+CHECKPOINT="$REPO_ROOT/.claude/current-task.md"
+if [ -f "$CHECKPOINT" ]; then
+  echo "Current Task:"
+  cat "$CHECKPOINT"
+  echo ""
+fi
+
 echo "=================================="
