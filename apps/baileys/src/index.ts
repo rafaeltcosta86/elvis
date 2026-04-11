@@ -13,6 +13,15 @@ import { join } from 'path';
 
 // Message store for getMessage retries (Signal protocol re-encryption)
 const msgStore = new Map<string, proto.IMessage>();
+
+// Dedup: prevent processing the same message twice (WhatsApp sometimes re-delivers)
+const processedIds = new Set<string>();
+function markProcessed(id: string): boolean {
+  if (processedIds.has(id)) return false;
+  processedIds.add(id);
+  if (processedIds.size > 200) processedIds.delete(processedIds.values().next().value!);
+  return true;
+}
 function storeMsg(id: string | null | undefined, msg: proto.IMessage | null | undefined) {
   if (!id || !msg) return;
   msgStore.set(id, msg);
@@ -173,6 +182,12 @@ async function connect(): Promise<void> {
         msg.message.extendedTextMessage?.text ??
         '';
       if (!text.trim()) continue;
+
+      const msgId = msg.key.id ?? '';
+      if (!markProcessed(msgId)) {
+        console.log(`[Baileys] duplicata ignorada id=${msgId}`);
+        continue;
+      }
 
       console.log(`[Baileys] self-chat → "${text}"`);
 
