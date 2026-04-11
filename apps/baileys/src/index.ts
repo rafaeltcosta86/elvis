@@ -242,11 +242,25 @@ app.post('/send', async (req, res) => {
   try {
     // Groups (@g.us) and phone numbers work fine.
     // @lid cannot be used for sending — fallback to OWNER_PHONE.
+    // Brazilian numbers: WhatsApp may register without the 9th digit (e.g. 554191352141
+    // instead of 5541991352141). Resolve via onWhatsApp() to get the canonical JID.
     let jid: string;
     if (to.endsWith('@lid')) {
       jid = `${OWNER_PHONE}@s.whatsapp.net`;
+    } else if (to.includes('@')) {
+      jid = to;
     } else {
-      jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+      // Resolve canonical JID for phone numbers
+      try {
+        const results = await sock.onWhatsApp(to);
+        const resolved = results?.[0];
+        jid = resolved?.jid ?? `${to}@s.whatsapp.net`;
+        if (resolved?.jid && resolved.jid !== `${to}@s.whatsapp.net`) {
+          console.log(`[Baileys] JID resolvido: ${to} → ${resolved.jid}`);
+        }
+      } catch {
+        jid = `${to}@s.whatsapp.net`;
+      }
     }
     console.log(`[Baileys] /send → jid="${jid}" text="${text.substring(0, 50)}"`);
     const result = await sock.sendMessage(jid, { text });
