@@ -121,6 +121,15 @@ async function connect(): Promise<void> {
     }
   });
 
+  // ── ACK tracking (SERVER_ACK=1, DELIVERY_ACK=2, READ=3) ───────────────
+  sock.ev.on('messages.update', (updates) => {
+    for (const { key, update } of updates) {
+      if (key.fromMe && update.status !== undefined) {
+        console.log(`[ACK] jid=${key.remoteJid} id=${key.id?.slice(0, 8)} status=${update.status}`);
+      }
+    }
+  });
+
   // ── Incoming messages ──────────────────────────────────────────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     // Store all messages for getMessage retries (Signal protocol)
