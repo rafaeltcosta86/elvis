@@ -78,10 +78,10 @@ describe('normalizeAudioCommand', () => {
     expect(result).toBe('manda para Estela: seu RG está na casa da Karen');
   });
 
-  it('inclui atribuição quando dono pede para "falar que eu disse"', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: seu pai pediu pra avisar: seu RG está na casa da Karen'));
+  it('inclui atribuição neutra quando dono pede para "falar que eu disse"', async () => {
+    mockFetch.mockResolvedValue(groqResponse('manda para Estela: ele pediu pra te avisar: seu RG está na casa da Karen'));
     const result = await normalizeAudioCommand('Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen');
-    expect(result).toBe('manda para Estela: seu pai pediu pra avisar: seu RG está na casa da Karen');
+    expect(result).toBe('manda para Estela: ele pediu pra te avisar: seu RG está na casa da Karen');
   });
 
   it('retorna texto limpo para comandos sem envio: "lembra de comprar pão"', async () => {

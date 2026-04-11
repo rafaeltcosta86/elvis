@@ -66,13 +66,13 @@ Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <no
   IMPORTANTE — reformule a mensagem na perspectiva de quem vai receber:
   - Troque "eu" → "seu pai" / "ele" conforme o contexto
   - Troque "dela" / "seu" → "seu" / "teu" dirigindo-se ao destinatário
-  - Se o dono pedir para "avisar que eu disse" ou "falar que fui eu": inclua "Seu pai pediu pra avisar:" no início
+  - Se o dono pedir para "avisar que eu disse" ou "falar que fui eu": inclua "Ele pediu pra te avisar:" no início
   - A mensagem final deve fazer sentido para quem a recebe, como se fosse enviada diretamente
   Exemplos:
     "Manda um oi pra Amanda" → "manda para Amanda: oi"
     "Diga para Estela que o RG dela está na casa da Karen" → "manda para Estela: seu RG está na casa da Karen"
-    "Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen" → "manda para Estela: seu pai pediu pra avisar: seu RG está na casa da Karen"
-    "Fala pra João que eu chego às 18h" → "manda para João: seu pai chega às 18h"
+    "Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen" → "manda para Estela: ele pediu pra te avisar: seu RG está na casa da Karen"
+    "Fala pra João que eu chego às 18h" → "manda para João: ele chega às 18h"
 
 Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
   "Lembra de comprar pão amanhã" → "comprar pão amanhã"
