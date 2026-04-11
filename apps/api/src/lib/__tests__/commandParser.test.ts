@@ -86,6 +86,30 @@ describe('parseCommand', () => {
     });
   });
 
+  describe('SEND_TO', () => {
+    it('estrutura clássica: manda para <nome>: <msg>', () => {
+      expect(parseCommand('manda para amanda: oi')).toEqual({
+        intent: 'SEND_TO',
+        args: { contactName: 'amanda', message: 'oi' },
+      });
+    });
+
+    it('linguagem natural de áudio: manda <msg> pra <nome>', () => {
+      expect(parseCommand('Manda um oi pra Amanda.')).toEqual({
+        intent: 'SEND_TO',
+        args: { contactName: 'Amanda', message: 'um oi' },
+      });
+    });
+
+    it('linguagem natural: manda um abraço para João', () => {
+      expect(parseCommand('manda um abraço para João')).toEqual({
+        intent: 'SEND_TO',
+        args: { contactName: 'João', message: 'um abraço' },
+      });
+    });
+
+  });
+
   describe('CREATE_TASK', () => {
     it('returns CREATE_TASK intent with rawText for plain text', () => {
       expect(parseCommand('comprar leite')).toEqual({
