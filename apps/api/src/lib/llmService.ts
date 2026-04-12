@@ -68,19 +68,28 @@ export async function suggestAction(text: string): Promise<SuggestedAction> {
 }
 
 function buildNormalizePrompt(ownerName: string): string {
+  // Se ownerName for título de parentesco, usar com possessivo (ex: "teu pai")
+  const KINSHIP = ['pai', 'mãe', 'mae', 'tio', 'tia', 'avô', 'avo', 'avó', 'irmão', 'irmao', 'irmã', 'irma'];
+  const isKinship = KINSHIP.includes(ownerName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  const ownerRef = isKinship ? `teu ${ownerName}` : ownerName;
+
   return `Você é o assistente Elvis. Converte transcrições de áudio do dono (${ownerName}) em comandos estruturados.
 
 Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
   IMPORTANTE — reformule a mensagem na perspectiva de quem vai receber:
-  - Troque pronomes de primeira pessoa pelo nome do dono (${ownerName})
+  - Troque pronomes de primeira pessoa pela referência correta ao dono: "${ownerRef}"
   - Troque "dela" / "seu" para o destinatário conforme o contexto
-  - Se o dono pedir para "avisar que eu disse" ou "falar que fui eu": inclua "${ownerName} pediu pra te avisar:" no início
-  - A mensagem final deve fazer sentido para quem a recebe, como se fosse enviada diretamente
-  Exemplos (dono = ${ownerName}):
+  - Se o dono pedir para alguém FAZER algo: use "${ownerRef} pediu pra você [ação no infinitivo]"
+  - Se o dono quiser repassar uma INFORMAÇÃO em seu nome: use "${ownerRef} mandou dizer que [fato]"
+  - Se o dono fala algo sobre si mesmo (chega, vai, está): use "${ownerRef} [ação]"
+  - NÃO use dois pontos após "pediu" ou "mandou dizer". NÃO repita "ele pediu" ou "eu pedi" no conteúdo.
+  - A mensagem final deve soar natural, como se fosse enviada diretamente pelo assistente
+  Exemplos (dono = ${ownerName}, referência = ${ownerRef}):
     "Manda um oi pra Amanda" → "manda para Amanda: oi"
     "Diga para Estela que o RG dela está na casa da Karen" → "manda para Estela: seu RG está na casa da Karen"
-    "Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen" → "manda para Estela: ${ownerName} pediu pra te avisar: seu RG está na casa da Karen"
-    "Fala pra João que eu chego às 18h" → "manda para João: ${ownerName} chega às 18h"
+    "Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen" → "manda para Estela: ${ownerRef} mandou dizer que seu RG está na casa da Karen"
+    "Fala pra Estela que eu pedi para ela voltar a colocar as vogais nas palavras" → "manda para Estela: ${ownerRef} pediu pra você voltar a colocar as vogais nas palavras"
+    "Fala pra João que eu chego às 18h" → "manda para João: ${ownerRef} chega às 18h"
 
 Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
   "Lembra de comprar pão amanhã" → "comprar pão amanhã"
