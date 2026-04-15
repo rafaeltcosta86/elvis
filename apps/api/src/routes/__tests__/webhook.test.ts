@@ -46,12 +46,17 @@ vi.mock('../../lib/llmService', () => ({
   suggestAction: vi.fn(),
 }));
 
+vi.mock('../../lib/oauthService', () => ({
+  getToken: vi.fn(),
+}));
+
 vi.mock('../../lib/redis', () => ({
   default: { set: vi.fn().mockResolvedValue('OK'), get: vi.fn().mockResolvedValue(null), del: vi.fn().mockResolvedValue(1) },
 }));
 
 import webhookRouter from '../webhook';
 import { getEmailSummary } from '../../lib/emailService';
+import { getToken } from '../../lib/oauthService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
 import { findByAlias, findByName, addAlias } from '../../lib/contactService';
@@ -421,5 +426,54 @@ describe('Webhook — EMAIL intent', () => {
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('e-mails');
+  });
+});
+
+describe('Webhook — CREATE_EVENT', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.userProfile.findFirst as any).mockResolvedValue(baseProfile);
+  });
+
+  it('retorna mensagem acionável quando OAuth do Outlook não está configurado', async () => {
+    (getToken as any).mockResolvedValue(null);
+    (classifyIntent as any).mockResolvedValue({ intent: 'CREATE_EVENT', title: 'Reunião', date: 'quinta', time: '15:00', duration_min: 60 });
+
+    await webhookPost('marca uma reunião quinta às 15h');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('❌');
+    expect(sentText.toLowerCase()).toMatch(/calendário|oauth|bootstrap/i);
+  });
+
+  it('mostra preview do evento quando OAuth está configurado e LLM retorna CREATE_EVENT', async () => {
+    (getToken as any).mockResolvedValue('fake-token');
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'CREATE_EVENT',
+      title: 'Reunião com Linic',
+      date: '2026-04-17',
+      time: '15:00',
+      duration_min: 60,
+    });
+    (prisma.communication.create as any).mockResolvedValue({ id: 'comm-1' });
+
+    await webhookPost('marca reunião com Linic quinta às 15h');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('📅');
+    expect(sentText).toContain('Reunião com Linic');
+    expect(sentText).toContain('1️⃣');
+  });
+
+  it('retorna erro de parse quando LLM não detecta CREATE_EVENT', async () => {
+    (getToken as any).mockResolvedValue('fake-token');
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+
+    await webhookPost('marca alguma coisa');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('❌');
   });
 });

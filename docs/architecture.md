@@ -261,3 +261,51 @@ Antes de iniciar qualquer implementação (feature, bugfix, refactor, docs):
 ### Exceções
 
 Só commitar direto em `main` se o usuário **explicitamente** pedir.
+
+---
+
+## Definition of Done — obrigatório para toda feature
+
+Uma feature só está pronta quando **todos** os critérios abaixo forem atendidos. Não criar PR sem isso.
+
+### 1. Pré-requisitos de integração verificados
+
+Antes de planejar qualquer feature que dependa de serviço externo (OAuth, API key, banco, fila):
+
+- **Listar explicitamente** cada pré-requisito no plano: *"Esta feature exige que X esteja configurado em produção"*
+- **Verificar o estado atual**: o pré-requisito existe? Está ativo? (ex: `oauth_tokens` tem entrada? A env var está definida?)
+- Se o pré-requisito **não estiver satisfeito**, o plano deve incluir o passo de configurá-lo **antes** da implementação, ou marcar a feature como bloqueada
+
+### 2. Cobertura de testes obrigatória
+
+Para toda feature que chama serviço externo ou depende de configuração:
+
+| Cenário | Teste obrigatório |
+|---|---|
+| Serviço externo não configurado (env ausente, token nulo) | Deve retornar mensagem de erro **acionável** para o usuário, não 503 genérico |
+| Happy path com mock | Verifica o fluxo completo até a resposta final para o usuário |
+| Confirmação/cancelamento (quando aplicável) | Verifica os dois caminhos |
+
+Regra: **se o código tem um `if (!token) return 503`**, deve ter um teste que cobre esse branch E um teste que verifica o que o **usuário vê** (não só o status HTTP).
+
+### 3. Mensagens de erro acionáveis
+
+Quando uma integração não está configurada, o usuário deve receber uma mensagem que explica o que fazer:
+
+```
+❌ Calendário não configurado. Execute o OAuth bootstrap no servidor para habilitar esta função.
+```
+
+Nunca retornar silêncio, timeout ou erro genérico para o canal WhatsApp.
+
+### 4. Smoke test após deploy
+
+Após qualquer deploy em produção que envolva nova integração:
+- Executar o caminho feliz manualmente (ou via `scripts/smoke-test.sh` quando cobrir a rota)
+- Registrar o resultado no PR ou em comentário na issue
+
+### Por que isso importa
+
+O critério de sucesso é receber o **menor número possível de apontamentos do Sentinel**. Apontamentos do Sentinel em produção são regressões que chegaram ao usuário — a meta é zero.
+
+Problemas de integração não configurada (como OAuth do Outlook no M13) devem ser capturados no planejamento, não descobertos pelo usuário ao testar.

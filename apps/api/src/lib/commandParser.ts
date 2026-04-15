@@ -12,6 +12,7 @@ export type Intent =
   | 'CONFIRM'
   | 'CANCEL'
   | 'ALIAS_SHORTCUT'
+  | 'CREATE_EVENT'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -102,6 +103,15 @@ export function parseCommand(text: string): ParsedCommand {
     return {
       intent: 'CANCEL',
       args: { communication_id: cancelMatch[1].trim() },
+    };
+  }
+
+  // Linguagem natural: "marca/agenda/cria reunião/evento/call..."
+  const createEventMatch = /^(?:marca(?:r)?|agenda(?:r)?|cria(?:r)?\s+(?:uma?\s+)?(?:reunião|evento|call|compromisso|meet))\b/i.test(trimmed);
+  if (createEventMatch) {
+    return {
+      intent: 'CREATE_EVENT',
+      args: { rawText: trimmed },
     };
   }
 
