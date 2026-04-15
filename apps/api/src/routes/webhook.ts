@@ -9,6 +9,7 @@ import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
 import { findByAlias, findByName, addAlias, createContact, setOwnerAlias } from '../lib/contactService';
 import { classifyIntent, suggestAction, normalizeAudioCommand } from '../lib/llmService';
+import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
 import redis from '../lib/redis';
@@ -249,6 +250,11 @@ async function handleIncomingWhatsApp(
       }
 
       case 'CREATE_EVENT': {
+        const calendarToken = await getToken();
+        if (!calendarToken) {
+          responseText = '❌ Calendário não configurado. Execute o OAuth bootstrap no servidor para habilitar agendamento via áudio.';
+          break;
+        }
         const eventClassification = await classifyIntent(args?.rawText ?? '');
         if (eventClassification.intent === 'CREATE_EVENT') {
           const startISO = buildEventStartISO(eventClassification.date, eventClassification.time);
