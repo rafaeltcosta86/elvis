@@ -1,0 +1,145 @@
+name: PDLC Board Automation
+
+on:
+  pull_request:
+    types: [opened, reopened, closed]
+  pull_request_review:
+    types: [submitted]
+
+env:
+  PROJECT_ID: PVT_kwHODpFFL84BUuhX
+  STATUS_FIELD_ID: PVTSSF_lAHODpFFL84BUuhXzhCrC38
+  STATUS_PULL_REQUEST: "839b1e1b"  # 🔀 Pull Request
+  STATUS_PRODUCAO: "aa880fa3"       # 🚀 Produção
+
+jobs:
+  move-card-on-pr-open:
+    name: PR aberto → Pull Request
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mover card para 🔀 Pull Request
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const repoOwner = context.repo.owner;
+            const repoName = context.repo.repo;
+
+            // Buscar a issue linkada ao PR (corpo ou branch)
+            const { data: pr } = await github.rest.pulls.get({
+              owner: repoOwner, repo: repoName, pull_number: prNumber
+            });
+
+            // Adicionar o PR ao project e mover para Pull Request
+            const addResult = await github.graphql(`
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                  item { id }
+                }
+              }
+            `, {
+              projectId: process.env.PROJECT_ID,
+              contentId: pr.node_id
+            });
+
+            const itemId = addResult.addProjectV2ItemById.item.id;
+
+            await github.graphql(`
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
+                }) { projectV2Item { id } }
+              }
+            `, {
+              projectId: process.env.PROJECT_ID,
+              itemId,
+              fieldId: process.env.STATUS_FIELD_ID,
+              value: { singleSelectOptionId: process.env.STATUS_PULL_REQUEST }
+            });
+
+            // Adicionar label pr:revisao
+            await github.rest.issues.addLabels({
+              owner: repoOwner, repo: repoName, issue_number: prNumber,
+              labels: ['pr:revisao']
+            });
+
+  move-card-on-pr-review:
+    name: PR aprovado → label pr:aprovado
+    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Atualizar labels do PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const repoOwner = context.repo.owner;
+            const repoName = context.repo.repo;
+
+            // Remove pr:revisao, adiciona pr:aprovado
+            try {
+              await github.rest.issues.removeLabel({
+                owner: repoOwner, repo: repoName,
+                issue_number: prNumber, name: 'pr:revisao'
+              });
+            } catch {}
+
+            await github.rest.issues.addLabels({
+              owner: repoOwner, repo: repoName, issue_number: prNumber,
+              labels: ['pr:aprovado']
+            });
+
+  move-card-on-pr-merge:
+    name: PR merged → Produção
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mover card para 🚀 Produção
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const repoOwner = context.repo.owner;
+            const repoName = context.repo.repo;
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: repoOwner, repo: repoName, pull_number: prNumber
+            });
+
+            // Buscar item do projeto pelo node_id do PR
+            const projectData = await github.graphql(`
+              query($nodeId: ID!) {
+                node(id: $nodeId) {
+                  ... on PullRequest {
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project { id }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { nodeId: pr.node_id });
+
+            const item = projectData.node.projectItems.nodes.find(
+              n => n.project.id === process.env.PROJECT_ID
+            );
+            if (!item) return;
+
+            await github.graphql(`
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
+                }) { projectV2Item { id } }
+              }
+            `, {
+              projectId: process.env.PROJECT_ID,
+              itemId: item.id,
+              fieldId: process.env.STATUS_FIELD_ID,
+              value: { singleSelectOptionId: process.env.STATUS_PRODUCAO }
+            });

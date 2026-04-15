@@ -3,7 +3,7 @@ import { type Task } from '@prisma/client';
 import { parseCommand } from '../lib/commandParser';
 import { sendWhatsApp } from '../lib/nanoclawClient';
 import prisma from '../lib/prisma';
-import { addDays, nextMonday } from 'date-fns';
+import { addDays, nextMonday, nextDay, format, parseISO, setHours, setMinutes } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
@@ -31,6 +31,48 @@ async function clearPending(senderId: string): Promise<void> {
 
 function draftPreview(contactName: string, message: string): string {
   return `📋 Vou mandar para *${contactName}*:\n"${message}"\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+}
+
+// Resolve relative date strings (e.g. "quinta", "amanhã", "YYYY-MM-DD") to ISO date
+function resolveDate(dateStr: string): string {
+  const now = utcToZonedTime(new Date(), TIMEZONE);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lower = dateStr.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const dayMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
+    domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+  };
+
+  if (lower === 'hoje' || lower === 'today') return format(today, 'yyyy-MM-dd');
+  if (lower === 'amanha' || lower === 'tomorrow') return format(addDays(today, 1), 'yyyy-MM-dd');
+  if (lower === 'proxima segunda' || lower === 'next monday') return format(nextMonday(today), 'yyyy-MM-dd');
+
+  for (const [key, dayOfWeek] of Object.entries(dayMap)) {
+    if (lower.startsWith(key)) {
+      const resolved = nextDay(today, dayOfWeek);
+      return format(resolved, 'yyyy-MM-dd');
+    }
+  }
+
+  // Already ISO (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+
+  // Fallback: tomorrow
+  return format(addDays(today, 1), 'yyyy-MM-dd');
+}
+
+function buildEventStartISO(dateStr: string, timeStr: string): string {
+  const datePart = resolveDate(dateStr);
+  const [h, m] = timeStr.split(':').map(Number);
+  const dt = setMinutes(setHours(parseISO(datePart), h ?? 0), m ?? 0);
+  return format(dt, "yyyy-MM-dd'T'HH:mm:ss");
+}
+
+function eventPreview(title: string, startISO: string, durationMin: number): string {
+  const [datePart, timePart] = startISO.split('T');
+  const time = (timePart ?? '').substring(0, 5);
+  return `📅 Vou marcar:\n*${title}*\n${datePart} às ${time} (${durationMin}min)\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
 }
 
 // Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
@@ -206,6 +248,33 @@ async function handleIncomingWhatsApp(
         break;
       }
 
+      case 'CREATE_EVENT': {
+        const eventClassification = await classifyIntent(args?.rawText ?? '');
+        if (eventClassification.intent === 'CREATE_EVENT') {
+          const startISO = buildEventStartISO(eventClassification.date, eventClassification.time);
+          const comm = await prisma.communication.create({
+            data: {
+              provider: 'WHATSAPP',
+              type: 'DRAFT',
+              to: null,
+              body: null,
+              status: 'AWAITING_APPROVAL',
+              metadata: {
+                kind: 'CREATE_EVENT',
+                title: eventClassification.title,
+                start: startISO,
+                duration_min: eventClassification.duration_min,
+              },
+            },
+          });
+          await savePending(sender_id, comm.id);
+          responseText = eventPreview(eventClassification.title, startISO, eventClassification.duration_min);
+        } else {
+          responseText = `❌ Não entendi o evento. Tente: "marca reunião com João quinta às 15h"`;
+        }
+        break;
+      }
+
       case 'CREATE_TASK': {
         // Try LLM classification before creating a task
         const classification = await classifyIntent(args?.rawText ?? '');
@@ -325,9 +394,40 @@ async function handleIncomingWhatsApp(
           break;
         }
         if (comm.status !== 'AWAITING_APPROVAL') {
-          responseText = `⚠️ Esta mensagem já foi processada (${comm.status === 'SENT' ? 'enviada' : 'cancelada'}).`;
+          responseText = `⚠️ Esta solicitação já foi processada (${comm.status === 'SENT' ? 'confirmada' : 'cancelada'}).`;
           break;
         }
+
+        const confirmMeta = comm.metadata as Record<string, unknown>;
+
+        if (confirmMeta?.kind === 'CREATE_EVENT') {
+          // Create calendar event via internal API call
+          const { title, start, duration_min } = confirmMeta as { title: string; start: string; duration_min: number };
+          const calendarRes = await fetch(`http://localhost:${process.env.PORT ?? 3000}/calendar/events`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.WEBHOOK_SECRET ?? ''}` },
+            body: JSON.stringify({ title, start, duration_min, dry_run: false }),
+          });
+          const calendarData = await calendarRes.json() as { event?: { subject?: string; start?: { dateTime?: string } }; error?: string };
+          await prisma.communication.update({ where: { id: comm.id }, data: { status: 'SENT', approved_at: new Date() } });
+          await clearPending(sender_id);
+          await prisma.auditLog.create({
+            data: {
+              actor: 'user',
+              action: 'calendar.event_created',
+              entity_type: 'Communication',
+              entity_id: comm.id,
+              summary: `Evento criado: ${title} em ${start}`,
+            },
+          });
+          if (calendarData.error) {
+            responseText = `❌ Erro ao criar evento: ${calendarData.error}`;
+          } else {
+            responseText = `✅ Evento criado!\n*${title}*\n${start.replace('T', ' às ').substring(0, 16)}`;
+          }
+          break;
+        }
+
         await sendWhatsApp(comm.to!, comm.body!);
         await prisma.communication.update({
           where: { id: comm.id },

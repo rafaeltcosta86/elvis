@@ -2,6 +2,7 @@ export type LLMClassification =
   | { intent: 'REGISTER_ALIAS'; alias: string; contact_name: string }
   | { intent: 'CREATE_CONTACT'; contact_name: string; phone: string; owner_alias?: string }
   | { intent: 'SET_OWNER_ALIAS'; contact_name: string; owner_alias: string }
+  | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
   | { intent: 'UNKNOWN' };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -19,6 +20,11 @@ Analise a mensagem e retorne JSON com UMA destas estruturas:
 - Alteração de como o dono se identifica com um contato: {"intent":"SET_OWNER_ALIAS","contact_name":"<nome>","owner_alias":"<como o dono quer ser chamado>"}
   Use quando pedirem para mudar/alterar/definir como o dono aparece ou se chama para um contato específico.
   Ex: "agora sou o pai pra Estela", "muda meu nome pra Linic para Rafa", "altere a interação com a Amanda para Amor"
+
+- Criação de evento no calendário: {"intent":"CREATE_EVENT","title":"<título do evento>","date":"<data no formato YYYY-MM-DD ou relativa como 'quinta','amanhã','sexta'>","time":"<hora no formato HH:MM>","duration_min":<duração em minutos, padrão 60>,"contact_name":"<opcional: nome do participante>"}
+  Use quando o usuário quiser agendar, marcar, criar uma reunião, evento, compromisso ou lembrança com hora.
+  Ex: "marca uma reunião com a Linic quinta às 15h" → {"intent":"CREATE_EVENT","title":"Reunião com Linic","date":"quinta","time":"15:00","duration_min":60,"contact_name":"Linic"}
+  Ex: "agenda call com o João amanhã às 10h, 30 minutos" → {"intent":"CREATE_EVENT","title":"Call com João","date":"amanhã","time":"10:00","duration_min":30,"contact_name":"João"}
 
 - Qualquer outra coisa: {"intent":"UNKNOWN"}
 
@@ -168,6 +174,16 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
     }
     if (parsed.intent === 'SET_OWNER_ALIAS' && parsed.contact_name && parsed.owner_alias) {
       return { intent: 'SET_OWNER_ALIAS', contact_name: parsed.contact_name, owner_alias: String(parsed.owner_alias) };
+    }
+    if (parsed.intent === 'CREATE_EVENT' && parsed.title && parsed.date && parsed.time) {
+      return {
+        intent: 'CREATE_EVENT',
+        title: String(parsed.title),
+        date: String(parsed.date),
+        time: String(parsed.time),
+        duration_min: typeof parsed.duration_min === 'number' ? parsed.duration_min : 60,
+        ...(parsed.contact_name ? { contact_name: String(parsed.contact_name) } : {}),
+      };
     }
     return { intent: 'UNKNOWN' };
   } catch {

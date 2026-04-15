@@ -132,4 +132,34 @@ describe('parseCommand', () => {
       });
     });
   });
+
+  describe('CREATE_EVENT', () => {
+    it('detects "marca" prefix', () => {
+      expect(parseCommand('marca uma reunião com a Linic quinta às 15h')).toEqual({
+        intent: 'CREATE_EVENT',
+        args: { rawText: 'marca uma reunião com a Linic quinta às 15h' },
+      });
+    });
+
+    it('detects "agenda" prefix', () => {
+      expect(parseCommand('agenda call com João amanhã às 10h')).toEqual({
+        intent: 'CREATE_EVENT',
+        args: { rawText: 'agenda call com João amanhã às 10h' },
+      });
+    });
+
+    it('detects "criar reunião" prefix', () => {
+      expect(parseCommand('criar uma reunião de time sexta')).toEqual({
+        intent: 'CREATE_EVENT',
+        args: { rawText: 'criar uma reunião de time sexta' },
+      });
+    });
+
+    it('detects "marcar" (with r)', () => {
+      expect(parseCommand('marcar dentista amanhã 9h')).toEqual({
+        intent: 'CREATE_EVENT',
+        args: { rawText: 'marcar dentista amanhã 9h' },
+      });
+    });
+  });
 });

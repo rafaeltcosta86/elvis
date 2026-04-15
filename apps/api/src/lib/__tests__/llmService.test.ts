@@ -102,6 +102,59 @@ describe('classifyIntent', () => {
   });
 });
 
+describe('CREATE_EVENT intent', () => {
+  it('returns CREATE_EVENT with all required fields', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"CREATE_EVENT","title":"Reunião com Linic","date":"quinta","time":"15:00","duration_min":60,"contact_name":"Linic"}')
+    );
+    const result = await classifyIntent('marca uma reunião com a Linic quinta às 15h');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'CREATE_EVENT',
+      title: 'Reunião com Linic',
+      date: 'quinta',
+      time: '15:00',
+      duration_min: 60,
+      contact_name: 'Linic',
+    });
+  });
+
+  it('returns CREATE_EVENT without contact_name when not provided', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"CREATE_EVENT","title":"Dentista","date":"amanhã","time":"09:00","duration_min":60}')
+    );
+    const result = await classifyIntent('marca dentista amanhã às 9h');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'CREATE_EVENT',
+      title: 'Dentista',
+      date: 'amanhã',
+      time: '09:00',
+      duration_min: 60,
+    });
+  });
+
+  it('defaults duration_min to 60 when not a number', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"CREATE_EVENT","title":"Call","date":"sexta","time":"10:00","duration_min":"trinta"}')
+    );
+    const result = await classifyIntent('agenda call sexta às 10h');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'CREATE_EVENT',
+      title: 'Call',
+      date: 'sexta',
+      time: '10:00',
+      duration_min: 60,
+    });
+  });
+
+  it('returns UNKNOWN when title is missing', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"CREATE_EVENT","date":"quinta","time":"15:00","duration_min":60}')
+    );
+    const result = await classifyIntent('marca algo quinta');
+    expect(result).toEqual<LLMClassification>({ intent: 'UNKNOWN' });
+  });
+});
+
 describe('normalizeAudioCommand', () => {
   it('normaliza "Manda um oi pra Amanda" → "manda para Amanda: oi"', async () => {
     mockFetch.mockResolvedValue(groqResponse('manda para Amanda: oi'));
