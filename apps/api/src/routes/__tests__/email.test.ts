@@ -24,6 +24,7 @@ vi.mock('../../lib/prisma', () => ({
     auditLog: {
       create: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -42,6 +43,13 @@ describe('Email Routes', () => {
     vi.clearAllMocks();
     delete process.env.DRY_RUN;
     delete process.env.SEND_ENABLED;
+
+    // $transaction mock: interactive form passes prisma itself as tx so that
+    // mockResolvedValue setups on prisma.communication/auditLog are picked up.
+    (prisma.$transaction as any).mockImplementation((arg: any) => {
+      if (typeof arg === 'function') return arg(prisma);
+      return Promise.all(arg);
+    });
   });
 
   // ─── POST /email/summary ─────────────────────────────────────────────────
