@@ -19,7 +19,7 @@ jobs:
             const issueNumber = context.payload.issue.number;
 
             const body = [
-              '@gemini-jules Por favor, corrija a violação de arquitetura descrita nesta issue.',
+              '@google-labs-jules Por favor, corrija a violação de arquitetura descrita nesta issue.',
               '',
               '**Passos obrigatórios antes de começar:**',
               '1. `git fetch origin && git checkout main && git pull` — sempre partir do HEAD atual de main',
