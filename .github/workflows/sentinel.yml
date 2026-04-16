@@ -66,8 +66,33 @@ jobs:
         if: steps.gemini-audit.outcome == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUDIT_RESULT: ${{ steps.gemini-audit.outputs.audit_result }}
+          PR_NUMBER: ${{ github.event.number }}
+          PR_BRANCH: ${{ github.head_ref }}
         run: |
+          INVARIANT=$(echo "$AUDIT_RESULT" | grep -oP "(?<=VIOLAÇÃO DETECTADA: )[^\n]+" | head -1 | cut -c1-60)
+          TITLE="🚨 Violação: Invariante '${INVARIANT:-desconhecida}' quebrada"
+
+          BODY=$(cat <<BODYEOF
+          ## Violação de arquitetura detectada pelo Sentinel
+
+          **Invariante:** ${INVARIANT:-ver análise abaixo}
+          **PR:** #${PR_NUMBER}
+          **Branch:** ${PR_BRANCH}
+
+          ### Análise do Sentinel
+
+          ${AUDIT_RESULT}
+
+          -----
+          Para o agente que resolver esta issue:
+          1. Leia AGENTS.md (instruções obrigatórias para agentes neste repositório)
+          2. Leia docs/architecture.md (invariantes e Definition of Done)
+          3. Sempre partir do HEAD atual de main antes de qualquer mudança
+          BODYEOF
+          )
+
           gh issue create \
-            --title "🚨 Violação de Invariante detectada no PR #${{ github.event.number }}" \
-            --body "O Sentinela detectou: ${{ steps.gemini-audit.outputs.audit_result }}" \
+            --title "$TITLE" \
+            --body "$BODY" \
             --label "architecture-violation"
