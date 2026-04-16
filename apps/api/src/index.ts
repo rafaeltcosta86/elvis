@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import healthRouter from './routes/health';
 import statusRouter from './routes/status';
 import tasksRouter from './routes/tasks';
@@ -12,6 +13,7 @@ import userRouter from './routes/user';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(cors({ origin: process.env.CORS_ORIGIN ?? false }));
 app.use(express.json());
 app.use('/', healthRouter);
 app.use('/', statusRouter);

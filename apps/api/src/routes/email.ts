@@ -44,26 +44,30 @@ router.post('/email/draft', async (req, res) => {
   const { provider, to, subject, body, thread_id } = parsed.data;
 
   try {
-    const comm = await prisma.communication.create({
-      data: {
-        provider,
-        type: 'DRAFT',
-        to,
-        subject,
-        body,
-        thread_id: thread_id ?? null,
-        status: 'AWAITING_APPROVAL',
-      },
-    });
+    const comm = await prisma.$transaction(async (tx) => {
+      const created = await tx.communication.create({
+        data: {
+          provider,
+          type: 'DRAFT',
+          to,
+          subject,
+          body,
+          thread_id: thread_id ?? null,
+          status: 'AWAITING_APPROVAL',
+        },
+      });
 
-    await prisma.auditLog.create({
-      data: {
-        actor: 'user',
-        action: 'email.draft',
-        entity_type: 'Communication',
-        entity_id: comm.id,
-        summary: `Draft created for ${to}`,
-      },
+      await tx.auditLog.create({
+        data: {
+          actor: 'user',
+          action: 'email.draft',
+          entity_type: 'Communication',
+          entity_id: created.id,
+          summary: `Draft created for ${to}`,
+        },
+      });
+
+      return created;
     });
 
     res.json({
@@ -112,19 +116,21 @@ router.post('/email/send', async (req, res) => {
   const isDryRun = process.env.DRY_RUN === 'true';
 
   if (isDryRun) {
-    await prisma.communication.update({
-      where: { id: comm.id },
-      data: { status: 'DRY_RUN' },
-    });
-    await prisma.auditLog.create({
-      data: {
-        actor: 'user',
-        action: 'email.dry_run',
-        entity_type: 'Communication',
-        entity_id: comm.id,
-        summary: `Dry-run send to ${comm.to}`,
-      },
-    });
+    await prisma.$transaction([
+      prisma.communication.update({
+        where: { id: comm.id },
+        data: { status: 'DRY_RUN' },
+      }),
+      prisma.auditLog.create({
+        data: {
+          actor: 'user',
+          action: 'email.dry_run',
+          entity_type: 'Communication',
+          entity_id: comm.id,
+          summary: `Dry-run send to ${comm.to}`,
+        },
+      }),
+    ]);
     res.json({ status: 'dry_run', would_send_to: comm.to });
     return;
   }
@@ -137,20 +143,21 @@ router.post('/email/send', async (req, res) => {
       await gmailClient.sendEmail(comm.to!, comm.subject!, comm.body!);
     }
 
-    await prisma.communication.update({
-      where: { id: comm.id },
-      data: { status: 'SENT', approved_at: new Date() },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        actor: 'user',
-        action: 'email.sent',
-        entity_type: 'Communication',
-        entity_id: comm.id,
-        summary: `Email sent to ${comm.to}`,
-      },
-    });
+    await prisma.$transaction([
+      prisma.communication.update({
+        where: { id: comm.id },
+        data: { status: 'SENT', approved_at: new Date() },
+      }),
+      prisma.auditLog.create({
+        data: {
+          actor: 'user',
+          action: 'email.sent',
+          entity_type: 'Communication',
+          entity_id: comm.id,
+          summary: `Email sent to ${comm.to}`,
+        },
+      }),
+    ]);
 
     res.json({ status: 'sent', communication_id: comm.id });
   } catch (err) {
