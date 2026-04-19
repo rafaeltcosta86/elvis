@@ -15,7 +15,7 @@ jobs:
       - name: Adicionar label jules para acionar o agente
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
