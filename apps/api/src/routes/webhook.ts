@@ -19,6 +19,23 @@ const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
 const PENDING_TTL = 600; // 10 minutos
 
+const DAY_MAP: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
+  domingo: 0,
+  segunda: 1,
+  terca: 2,
+  quarta: 3,
+  quinta: 4,
+  sexta: 5,
+  sabado: 6,
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
 async function savePending(senderId: string, commId: string): Promise<void> {
   await redis.set(`pending:${senderId}`, commId, 'EX', PENDING_TTL);
 }
@@ -41,16 +58,11 @@ function resolveDate(dateStr: string): string {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const lower = dateStr.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  const dayMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
-    domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
-    sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
-  };
-
   if (lower === 'hoje' || lower === 'today') return format(today, 'yyyy-MM-dd');
   if (lower === 'amanha' || lower === 'tomorrow') return format(addDays(today, 1), 'yyyy-MM-dd');
   if (lower === 'proxima segunda' || lower === 'next monday') return format(nextMonday(today), 'yyyy-MM-dd');
 
-  for (const [key, dayOfWeek] of Object.entries(dayMap)) {
+  for (const [key, dayOfWeek] of Object.entries(DAY_MAP)) {
     if (lower.startsWith(key)) {
       const resolved = nextDay(today, dayOfWeek);
       return format(resolved, 'yyyy-MM-dd');
