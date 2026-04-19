@@ -7,18 +7,27 @@ on:
 jobs:
   trigger-jules-on-spec-approved:
     name: spec:approved → acionar Jules para implementação
-    if: contains(github.event.issue.labels.*.name, 'spec:approved')
+    if: github.event.label.name == 'spec:approved'
     runs-on: ubuntu-latest
     permissions:
       issues: write
     steps:
-      - name: Comentar na issue acionando Jules para implementação
+      - name: Adicionar label jules e comentar para acionar o agente
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
             const issueNumber = context.payload.issue.number;
 
+            // 1. Adicionar label jules para garantir o gatilho externo
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['jules'],
+            });
+
+            // 2. Postar o comentário com as instruções detalhadas
             const body = [
               '@google-labs-jules A spec desta issue foi aprovada. Por favor, implemente conforme descrito no body acima.',
               '',
