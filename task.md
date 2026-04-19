@@ -435,3 +435,4 @@ pnpm lint && pnpm build
 | 2026-03-20 | Bloco 34 [COWORK] concluído: .env.prod.example + infra/OPERATIONS.md + .gitignore — **M9 completo** ✅ |
 | 2026-04-09 | [TRAD] Hipótese MVP validada: SEND_TO funciona (commandParser + webhook + whatsappService + adapters). Gap identificado: WhatsApp sem approval gate viola Invariante #1. M10 definido para corrigir. |
 | 2026-04-10 | M11 [COWORK] concluído: Contact table + migration, contactService, llmService (Groq), ALIAS_SHORTCUT, aprendizado semântico de atalhos — **175 testes passando** ✅ |
+| 2026-04-11 | PDLC [COWORK] concluído: Automação upstream via marcadores HTML e trigger do Jules para `spec:approved` — **231 testes passando** ✅ |
