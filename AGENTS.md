@@ -34,6 +34,25 @@ Sempre partir do HEAD atual de `main`. Nunca trabalhar sobre um snapshot desatua
 4. **Contrato Ternário WhatsApp** — respostas ao usuário via WhatsApp obrigatoriamente com
    3 componentes: (1) o que foi entendido, (2) o que foi feito, (3) próximo passo.
 
+## PDLC — Transição de stages upstream
+
+O agente upstream (Claude Code) sinaliza a progressão de um card adicionando uma label à issue:
+
+| Stage | Label | Quando adicionar |
+|---|---|---|
+| Exploração | `pdlc:exploracao` | Ao iniciar a análise de código/contexto |
+| Brainstorming | `pdlc:brainstorming` | Ao apresentar abordagens ao PM |
+| Detalhar Solução | `pdlc:detalhando` | Após aprovação do brainstorm (Gate 1) |
+| Aprovação | `pdlc:aprovacao` | Quando a spec está pronta para revisão |
+
+```bash
+# Exemplo — mover card da issue #35 para Exploração
+gh issue edit 35 --repo rafaeltcosta86/elvis --add-label "pdlc:exploracao"
+```
+
+O workflow `project-automation.yml` detecta a label e move o card no board automaticamente.
+Remova labels `pdlc:*` anteriores ao adicionar a nova (uma label por vez é suficiente).
+
 ## Workflow obrigatório para correção de violações
 
 1. Ler a issue na íntegra — identificar qual invariante foi violada e em qual arquivo

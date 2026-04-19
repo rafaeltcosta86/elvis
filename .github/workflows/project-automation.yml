@@ -5,8 +5,8 @@ on:
     types: [opened, reopened, closed]
   pull_request_review:
     types: [submitted]
-  issue_comment:
-    types: [created]
+  issues:
+    types: [labeled]
 
 env:
   PROJECT_ID: PVT_kwHODpFFL84BUuhX
@@ -20,59 +20,42 @@ env:
   STATUS_PRODUCAO: "c724aa2c"      # 🚀 Produção
 
 jobs:
-  move-card-on-agent-comment:
-    name: Comentário do agente → mover card upstream
-    if: github.event_name == 'issue_comment' && github.event.action == 'created'
+  move-card-on-pdlc-label:
+    name: Label pdlc:* → mover card upstream
+    if: github.event_name == 'issues' && startsWith(github.event.label.name, 'pdlc:')
     runs-on: ubuntu-latest
     steps:
-      - name: Detectar marcador e mover card
+      - name: Mapear label para coluna e mover card
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
-            const commentBody = context.payload.comment.body;
-            const match = commentBody.match(/<!-- PDLC:stage:(exploracao|brainstorming|detalhando|aprovacao) -->/);
-
-            if (!match) {
-              console.log('Nenhum marcador PDLC encontrado no comentário.');
-              return;
-            }
-
-            const stage = match[1];
+            const label = context.payload.label.name;
             const statusMap = {
-              exploracao: process.env.STATUS_EXPLORACAO,
-              brainstorming: process.env.STATUS_BRAINSTORMING,
-              detalhando: process.env.STATUS_DETALHANDO,
-              aprovacao: process.env.STATUS_APROVACAO
+              'pdlc:exploracao':    process.env.STATUS_EXPLORACAO,
+              'pdlc:brainstorming': process.env.STATUS_BRAINSTORMING,
+              'pdlc:detalhando':    process.env.STATUS_DETALHANDO,
+              'pdlc:aprovacao':     process.env.STATUS_APROVACAO,
             };
+            const optionId = statusMap[label];
+            if (!optionId) { console.log(`Label ${label} sem mapeamento.`); return; }
 
-            const optionId = statusMap[stage];
             const issueNodeId = context.payload.issue.node_id;
-
-            console.log(`Detectado stage: ${stage}. Movendo issue ${context.payload.issue.number} para status ${optionId}`);
-
             const addResult = await github.graphql(`
-              mutation($projectId: ID!, $contentId: ID!) {
-                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-                  item { id }
-                }
-              }
-            `, { projectId: process.env.PROJECT_ID, contentId: issueNodeId });
+              mutation($p: ID!, $c: ID!) {
+                addProjectV2ItemById(input: {projectId: $p, contentId: $c}) { item { id } }
+              }`, { p: process.env.PROJECT_ID, c: issueNodeId });
 
             const itemId = addResult.addProjectV2ItemById.item.id;
-
             await github.graphql(`
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
-                }) { projectV2Item { id } }
-              }
-            `, {
-              projectId: process.env.PROJECT_ID,
-              itemId,
-              fieldId: process.env.STATUS_FIELD_ID,
-              value: { singleSelectOptionId: optionId }
-            });
+              mutation($p: ID!, $i: ID!, $f: ID!, $v: ProjectV2FieldValue!) {
+                updateProjectV2ItemFieldValue(input: {projectId: $p, itemId: $i, fieldId: $f, value: $v}) {
+                  projectV2Item { id }
+                }
+              }`, { p: process.env.PROJECT_ID, i: itemId, f: process.env.STATUS_FIELD_ID,
+                    v: { singleSelectOptionId: optionId } });
+
+            console.log(`Issue #${context.payload.issue.number} movida para ${label}`);
 
   move-card-on-pr-open:
     name: PR aberto → Code Review (move issue linkada)
@@ -148,7 +131,7 @@ jobs:
     if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     steps:
-      - name: Mover issue para 🔀 Pull Request + label pr:aprovado
+      - name: Mover issue para 🔀 Pull Request + label pr:approved
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.PROJECT_TOKEN }}
@@ -208,7 +191,7 @@ jobs:
               });
             } catch {}
             await github.rest.issues.addLabels({
-              owner: repoOwner, repo: repoName, issue_number: prNumber, labels: ['pr:aprovado']
+              owner: repoOwner, repo: repoName, issue_number: prNumber, labels: ['pr:approved']
             }).catch(() => {});
 
   move-card-on-pr-merge:
