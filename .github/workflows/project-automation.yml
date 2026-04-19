@@ -5,15 +5,75 @@ on:
     types: [opened, reopened, closed]
   pull_request_review:
     types: [submitted]
+  issue_comment:
+    types: [created]
 
 env:
   PROJECT_ID: PVT_kwHODpFFL84BUuhX
   STATUS_FIELD_ID: PVTSSF_lAHODpFFL84BUuhXzhCrC38
+  STATUS_EXPLORACAO: "cbd82d6d"    # 🔍 Exploração
+  STATUS_BRAINSTORMING: "ebae8a7e" # 🧠 Brainstorming
+  STATUS_DETALHANDO: "e3f3434b"    # 📐 Detalhar Solução
+  STATUS_APROVACAO: "56bca1f4"     # ✅ Aprovação
   STATUS_CODE_REVIEW: "bf3041ab"   # 👁 Code Review
   STATUS_PULL_REQUEST: "f7c08ab8"  # 🔀 Pull Request
   STATUS_PRODUCAO: "c724aa2c"      # 🚀 Produção
 
 jobs:
+  move-card-on-agent-comment:
+    name: Comentário do agente → mover card upstream
+    if: github.event_name == 'issue_comment' && github.event.action == 'created'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detectar marcador e mover card
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const commentBody = context.payload.comment.body;
+            const match = commentBody.match(/<!-- PDLC:stage:(exploracao|brainstorming|detalhando|aprovacao) -->/);
+
+            if (!match) {
+              console.log('Nenhum marcador PDLC encontrado no comentário.');
+              return;
+            }
+
+            const stage = match[1];
+            const statusMap = {
+              exploracao: process.env.STATUS_EXPLORACAO,
+              brainstorming: process.env.STATUS_BRAINSTORMING,
+              detalhando: process.env.STATUS_DETALHANDO,
+              aprovacao: process.env.STATUS_APROVACAO
+            };
+
+            const optionId = statusMap[stage];
+            const issueNodeId = context.payload.issue.node_id;
+
+            console.log(`Detectado stage: ${stage}. Movendo issue ${context.payload.issue.number} para status ${optionId}`);
+
+            const addResult = await github.graphql(`
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                  item { id }
+                }
+              }
+            `, { projectId: process.env.PROJECT_ID, contentId: issueNodeId });
+
+            const itemId = addResult.addProjectV2ItemById.item.id;
+
+            await github.graphql(`
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
+                }) { projectV2Item { id } }
+              }
+            `, {
+              projectId: process.env.PROJECT_ID,
+              itemId,
+              fieldId: process.env.STATUS_FIELD_ID,
+              value: { singleSelectOptionId: optionId }
+            });
+
   move-card-on-pr-open:
     name: PR aberto → Code Review (move issue linkada)
     if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { type Task } from '@prisma/client';
 import { parseCommand } from '../lib/commandParser';
 import { sendWhatsApp } from '../lib/nanoclawClient';
@@ -104,9 +105,20 @@ function parseContacts(raw: string): Array<{ name: string; phone: string }> {
 // Validate Bearer token against a given secret
 function validateToken(authHeader: string | undefined, secret: string): boolean {
   if (!authHeader) return false;
-  const [type, token] = authHeader.split(' ');
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2) return false;
+
+  const [type, token] = parts;
   if (type !== 'Bearer') return false;
-  return token === secret;
+
+  const tokenBuffer = Buffer.from(token);
+  const secretBuffer = Buffer.from(secret);
+
+  if (tokenBuffer.length !== secretBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(tokenBuffer, secretBuffer);
 }
 
 // Core handler — shared by all webhook providers
