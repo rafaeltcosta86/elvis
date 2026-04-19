@@ -1,0 +1,29 @@
+name: Auto-approve PR
+
+# Dispara quando a label pr:approved é adicionada a um PR
+# Pré-requisito: Settings → Actions → General → "Allow GitHub Actions reviews to count towards required approval"
+on:
+  pull_request_target:
+    types: [labeled]
+
+jobs:
+  approve:
+    name: Aprovar PR via bot quando pr:approved adicionado
+    if: github.event.label.name == 'pr:approved'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Aprovar PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: 'APPROVE',
+              body: 'Aprovado via label pr:approved pelo revisor.',
+            });
+            console.log(`PR #${context.payload.pull_request.number} aprovado.`);
