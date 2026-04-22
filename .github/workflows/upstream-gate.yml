@@ -1,0 +1,51 @@
+name: Upstream PDLC Gate
+
+# Detecta aprovação do PM por comentário em issues no stage de Brainstorming.
+# Quando o PM comenta "aprovado", "approved", "ok" ou "pode detalhar":
+#   → troca pdlc:brainstorming por pdlc:detalhando
+#   → o workflow project-automation.yml move o card automaticamente
+#
+# Nota: o agente upstream (Claude Code) ainda precisa ser invocado manualmente
+# para escrever os Acceptance Criteria após o card mover para Detalhar Solução.
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  brainstorm-gate:
+    name: Comentário do PM → transição brainstorming → detalhando
+    # Só atua em issues (não PRs), com label pdlc:brainstorming, comentário não-bot
+    if: |
+      github.event.issue.pull_request == null &&
+      contains(github.event.issue.labels.*.name, 'pdlc:brainstorming') &&
+      github.event.comment.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Detectar aprovação e transicionar label
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const body = context.payload.comment.body.toLowerCase().trim();
+            const approved = /\b(aprovado|approved|ok|lgtm|pode detalhar)\b/.test(body);
+
+            if (!approved) {
+              console.log('Comentário não contém keyword de aprovação. Nenhuma ação.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.issue.number;
+
+            await github.rest.issues.removeLabel({
+              owner, repo, issue_number, name: 'pdlc:brainstorming'
+            }).catch(() => {});
+
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number, labels: ['pdlc:detalhando']
+            });
+
+            console.log(`Issue #${issue_number}: brainstorming aprovado pelo PM → pdlc:detalhando`);

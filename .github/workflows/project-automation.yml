@@ -15,6 +15,8 @@ env:
   STATUS_BRAINSTORMING: "ebae8a7e" # 🧠 Brainstorming
   STATUS_DETALHANDO: "e3f3434b"    # 📐 Detalhar Solução
   STATUS_APROVACAO: "56bca1f4"     # ✅ Aprovação
+  STATUS_DESENVOLVIMENTO: "6fe4ef2d" # ⚙️ Desenvolvimento
+  STATUS_TESTES: "82e693e6"          # 🧪 Testes
   STATUS_CODE_REVIEW: "bf3041ab"   # 👁 Code Review
   STATUS_PULL_REQUEST: "f7c08ab8"  # 🔀 Pull Request
   STATUS_PRODUCAO: "c724aa2c"      # 🚀 Produção
@@ -32,10 +34,12 @@ jobs:
           script: |
             const label = context.payload.label.name;
             const statusMap = {
-              'pdlc:exploracao':    process.env.STATUS_EXPLORACAO,
-              'pdlc:brainstorming': process.env.STATUS_BRAINSTORMING,
-              'pdlc:detalhando':    process.env.STATUS_DETALHANDO,
-              'pdlc:aprovacao':     process.env.STATUS_APROVACAO,
+              'pdlc:exploracao':      process.env.STATUS_EXPLORACAO,
+              'pdlc:brainstorming':   process.env.STATUS_BRAINSTORMING,
+              'pdlc:detalhando':      process.env.STATUS_DETALHANDO,
+              'pdlc:aprovacao':       process.env.STATUS_APROVACAO,
+              'pdlc:desenvolvimento': process.env.STATUS_DESENVOLVIMENTO,
+              'pdlc:testes':          process.env.STATUS_TESTES,
             };
             const optionId = statusMap[label];
             if (!optionId) { console.log(`Label ${label} sem mapeamento.`); return; }
