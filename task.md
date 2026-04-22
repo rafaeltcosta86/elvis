@@ -275,7 +275,7 @@ bash scripts/backup.sh && ls backups/  # → arquivo .dump de hoje
 > **Contexto:** Em 2026-04-09, a hipótese central do MVP foi validada: o comando `SEND_TO` existe e funciona (ex: "manda para assistente: já terminei a reunião"). No entanto, o `ai-blueprints.md` exige `approval_record_id` antes de qualquer escrita externa, e o WhatsApp envia imediatamente sem approval gate — violando a Invariante #1. M10 corrige essa lacuna trazendo WhatsApp para paridade com o fluxo de e-mail.
 
 - [ ] Quando `SEND_TO` é acionado, criar registro `Communication` (status: `AWAITING_APPROVAL`, channel: `WHATSAPP`)
-- [ ] Responder ao owner com preview: _"Vou mandar para [nome]: '[msg]'. Confirma? /confirm [id] ou /cancel [id]"_
+- [ ] Responder ao owner with preview: _"Vou mandar para [nome]: '[msg]'. Confirma? /confirm [id] ou /cancel [id]"_
 - [ ] Implementar intent `CONFIRM` no commandParser (ex: "/confirm 42")
 - [ ] Implementar intent `CANCEL` no commandParser (ex: "/cancel 42")
 - [ ] Só enviar a mensagem real após `/confirm` — verificar `approval_record_id` no banco
@@ -437,3 +437,4 @@ pnpm lint && pnpm build
 | 2026-04-10 | M11 [COWORK] concluído: Contact table + migration, contactService, llmService (Groq), ALIAS_SHORTCUT, aprendizado semântico de atalhos — **175 testes passando** ✅ |
 | 2026-04-17 | Performance: Moved dayMap instantiation outside resolveDate in webhook.ts to reduce GC pressure.
 | 2026-04-11 | PDLC [COWORK] concluído: Automação upstream via marcadores HTML e trigger do Jules para `spec:approved` — **231 testes passando** ✅ |
+| 2026-04-18 | Briefing [COWORK] concluído: Integrou eventos do calendário Outlook ao briefing diário (07:30) com fallback OAuth e formatação pt-BR — **235 testes passando** ✅ |
