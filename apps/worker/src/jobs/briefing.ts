@@ -3,7 +3,7 @@ import { isQuietHours } from '../lib/quietHours';
 import { sendMessage } from '../lib/messenger';
 import { utcToZonedTime, format as formatTz } from 'date-fns-tz';
 import { getToken } from '../lib/oauthService';
-import { getCalendarEventsForToday } from '@elvis/shared';
+import { getCalendarEventsForToday } from '@shared';
 
 export async function briefingJob(): Promise<void> {
   const ownerPhone = process.env.OWNER_PHONE || '551199999999';

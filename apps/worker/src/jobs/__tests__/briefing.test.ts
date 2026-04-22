@@ -3,7 +3,7 @@ import { briefingJob } from '../briefing';
 import prisma from '../../lib/prisma';
 import { sendMessage } from '../../lib/messenger';
 import { getToken } from '../../lib/oauthService';
-import { getCalendarEventsForToday } from '@elvis/shared';
+import { getCalendarEventsForToday } from '@shared';
 
 vi.mock('../../lib/prisma', () => ({
   default: {
@@ -32,7 +32,7 @@ vi.mock('../../lib/oauthService', () => ({
   getToken: vi.fn(),
 }));
 
-vi.mock('@elvis/shared', () => ({
+vi.mock('@shared', () => ({
   getCalendarEventsForToday: vi.fn(),
 }));
 
@@ -52,7 +52,6 @@ describe('briefingJob', () => {
   it('AC1: sends briefing with events when token and events exist', async () => {
     (getToken as any).mockResolvedValue('valid-token');
 
-    // Using ISO strings with explicit offset to avoid test failures due to local timezone
     (getCalendarEventsForToday as any).mockResolvedValue([
       {
         title: 'Reunião com cliente',
