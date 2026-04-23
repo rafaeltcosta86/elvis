@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { getToken } from './oauthService';
+export { getCalendarEventsForToday, type CalendarEvent } from '@shared';
 
 /**
  * Creates an axios instance configured for Microsoft Graph API calls.
