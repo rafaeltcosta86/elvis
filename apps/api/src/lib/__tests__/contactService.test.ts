@@ -8,6 +8,7 @@ vi.mock('../prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
       findMany: vi.fn(),
+      delete: vi.fn(),
     },
   },
 }));
@@ -20,6 +21,7 @@ import {
   createContact,
   setOwnerAlias,
   listContacts,
+  deleteContact,
 } from '../contactService';
 
 const linic = {
@@ -134,5 +136,16 @@ describe('listContacts', () => {
     (prisma.contact.findMany as any).mockResolvedValue([linic]);
     const result = await listContacts();
     expect(result).toEqual([linic]);
+  });
+});
+
+describe('deleteContact', () => {
+  it('deletes contact by id', async () => {
+    (prisma.contact.delete as any).mockResolvedValue(linic);
+    const result = await deleteContact('c1');
+    expect(prisma.contact.delete).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+    });
+    expect(result).toEqual(linic);
   });
 });

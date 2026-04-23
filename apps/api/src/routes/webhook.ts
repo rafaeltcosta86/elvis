@@ -15,6 +15,7 @@ import {
   createContact,
   setOwnerAlias,
   listContacts,
+  deleteContact,
 } from '../lib/contactService';
 import { classifyIntent, suggestAction, normalizeAudioCommand } from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
@@ -94,6 +95,10 @@ function eventPreview(title: string, startISO: string, durationMin: number): str
   const [datePart, timePart] = startISO.split('T');
   const time = (timePart ?? '').substring(0, 5);
   return `📅 Vou marcar:\n*${title}*\n${datePart} às ${time} (${durationMin}min)\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+}
+
+function deleteContactPreview(name: string, alias: string, phone: string): string {
+  return `🗑️ Confirmar deleção?\n\nNome: ${name}\nAlias: ${alias}\nTelefone: ${phone}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
 }
 
 // Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
@@ -381,6 +386,39 @@ async function handleIncomingWhatsApp(
           break;
         }
 
+        if (classification.intent === 'DELETE_CONTACT') {
+          const identifier = classification.contact_identifier;
+          const contact = identifier.startsWith('/')
+            ? await findByAlias(identifier)
+            : await findByName(identifier);
+
+          if (!contact) {
+            responseText = `❌ Não encontrei nenhum contato com esse nome ou alias. Verifique com /contatos.`;
+            break;
+          }
+
+          const alias = contact.aliases[0] || '';
+          const formattedAlias = alias.startsWith('/') ? alias : `/${alias}`;
+
+          const comm = await prisma.communication.create({
+            data: {
+              provider: 'WHATSAPP',
+              type: 'DRAFT',
+              to: null,
+              body: null,
+              status: 'AWAITING_APPROVAL',
+              metadata: {
+                kind: 'DELETE_CONTACT',
+                contactId: contact.id,
+                contactName: contact.name,
+              },
+            },
+          });
+          await savePending(sender_id, comm.id);
+          responseText = deleteContactPreview(contact.name, formattedAlias, contact.phone);
+          break;
+        }
+
         const newTask = await prisma.task.create({
           data: {
             title: args?.rawText || 'Sem título',
@@ -499,6 +537,27 @@ async function handleIncomingWhatsApp(
           break;
         }
 
+        if (confirmMeta?.kind === 'DELETE_CONTACT') {
+          const { contactId, contactName } = confirmMeta as { contactId: string; contactName: string };
+          await deleteContact(contactId);
+          await prisma.communication.update({
+            where: { id: comm.id },
+            data: { status: 'SENT', approved_at: new Date() },
+          });
+          await clearPending(sender_id);
+          await prisma.auditLog.create({
+            data: {
+              actor: 'user',
+              action: 'contact.deleted',
+              entity_type: 'Contact',
+              entity_id: contactId,
+              summary: `Contato ${contactName} removido`,
+            },
+          });
+          responseText = `✅ Contato ${contactName} removido.`;
+          break;
+        }
+
         await sendWhatsApp(comm.to!, comm.body!);
         await prisma.communication.update({
           where: { id: comm.id },
@@ -530,6 +589,9 @@ async function handleIncomingWhatsApp(
           responseText = `⚠️ Esta mensagem já foi processada.`;
           break;
         }
+
+        const cancelMeta = comm.metadata as Record<string, unknown>;
+
         await prisma.communication.update({
           where: { id: comm.id },
           data: { status: 'CANCELLED' },
@@ -538,13 +600,18 @@ async function handleIncomingWhatsApp(
         await prisma.auditLog.create({
           data: {
             actor: 'user',
-            action: 'whatsapp.cancelled',
+            action: cancelMeta?.kind === 'DELETE_CONTACT' ? 'contact.deletion_cancelled' : 'whatsapp.cancelled',
             entity_type: 'Communication',
             entity_id: comm.id,
-            summary: `WhatsApp cancelado para ${comm.to}`,
+            summary: cancelMeta?.kind === 'DELETE_CONTACT' ? `Deleção de contato cancelada` : `WhatsApp cancelado para ${comm.to}`,
           },
         });
-        responseText = `🚫 Mensagem cancelada.`;
+
+        if (cancelMeta?.kind === 'DELETE_CONTACT') {
+          responseText = `❌ Deleção cancelada.`;
+        } else {
+          responseText = `🚫 Mensagem cancelada.`;
+        }
         break;
       }
 
