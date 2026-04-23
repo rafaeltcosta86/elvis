@@ -1,9 +1,8 @@
 import prisma from '../lib/prisma';
 import { isQuietHours } from '../lib/quietHours';
 import { sendMessage } from '../lib/messenger';
-import { utcToZonedTime, format as formatTz } from 'date-fns-tz';
-import { getToken } from '../lib/oauthService';
-import { getCalendarEventsForToday } from '@shared';
+import { format } from 'date-fns';
+import { utcToZonedTime } from 'date-fns-tz';
 
 export async function briefingJob(): Promise<void> {
   const ownerPhone = process.env.OWNER_PHONE || '551199999999';
@@ -21,9 +20,8 @@ export async function briefingJob(): Promise<void> {
     return;
   }
 
-  // Check daily nudge count
-  const timezone = 'America/Sao_Paulo';
-  const today = utcToZonedTime(new Date(), timezone);
+  // Check daily nudge count (naive: count today's audit logs with action containing "nudge")
+  const today = utcToZonedTime(new Date(), 'America/Sao_Paulo');
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(startOfDay);
   endOfDay.setDate(endOfDay.getDate() + 1);
@@ -41,30 +39,7 @@ export async function briefingJob(): Promise<void> {
     return;
   }
 
-  // 1. Calendar Events
-  let calendarText = '';
-  let calendarWarning = '';
-  try {
-    const token = await getToken();
-    if (token) {
-      const events = await getCalendarEventsForToday(token);
-      if (events.length > 0) {
-        calendarText = '📅 Compromissos de hoje:\n' +
-          events.map(e => {
-            const zonedStart = utcToZonedTime(new Date(e.start), timezone);
-            const startTime = formatTz(zonedStart, 'HH:mm', { timeZone: timezone });
-            return `• ${startTime} — ${e.title} (${e.durationText})`;
-          }).join('\n') + '\n\n';
-      }
-    } else {
-      calendarWarning = '📅 Calendário não configurado. Execute o OAuth bootstrap no servidor para habilitar.\n\n';
-    }
-  } catch (error) {
-    console.error('Error fetching calendar events:', error);
-    calendarWarning = '📅 Calendário não configurado. Execute o OAuth bootstrap no servidor para habilitar.\n\n';
-  }
-
-  // 2. Tasks
+  // Get today's data (overdue + urgent tasks)
   const tasks = await prisma.task.findMany({
     where: { status: { in: ['PENDING', 'IN_PROGRESS'] } },
   });
@@ -77,18 +52,13 @@ export async function briefingJob(): Promise<void> {
       (t.due_at && t.due_at >= todayDate && t.due_at < endOfDay)
   );
 
-  // Deduplicate and get top 3
-  const combined = [...overdue, ...urgent];
-  const uniqueTasks = combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-  const top3 = uniqueTasks.slice(0, 3);
+  const top3 = [...overdue, ...urgent].slice(0, 3);
+  const topText =
+    top3.length > 0
+      ? top3.map((t) => `• ${t.title}`).join('\n')
+      : '(nenhuma)';
 
-  const top3Text = top3.length > 0
-    ? `Top 3: ${top3.map(t => t.title).join(' · ')}`
-    : 'Top 3: (nenhuma)';
-
-  const tasksText = `✅ Tarefas: ${overdue.length} atrasadas · ${urgent.length} urgentes\n${top3Text}`;
-
-  const text = `Bom dia! ☀️\n${calendarText}${calendarWarning}${tasksText}`;
+  const text = `Bom dia! ☀️\n\nResumo do dia:\n• ${overdue.length} atrasados\n• ${urgent.length} urgentes\n\nTop 3:\n${topText}`;
 
   await sendMessage(ownerPhone, text);
 
