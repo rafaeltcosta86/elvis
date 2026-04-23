@@ -3,7 +3,7 @@ import { briefingJob } from '../briefing';
 import prisma from '../../lib/prisma';
 import { sendMessage } from '../../lib/messenger';
 import { getToken } from '../../lib/oauthService';
-import { getCalendarEventsForToday } from '@shared';
+import { getCalendarEventsForToday } from '@elvis/shared';
 
 vi.mock('../../lib/prisma', () => ({
   default: {
@@ -32,7 +32,7 @@ vi.mock('../../lib/oauthService', () => ({
   getToken: vi.fn(),
 }));
 
-vi.mock('@shared', () => ({
+vi.mock('@elvis/shared', () => ({
   getCalendarEventsForToday: vi.fn(),
 }));
 
