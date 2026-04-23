@@ -27,6 +27,22 @@ jobs:
               labels: ['jules'],
             });
 
+            // 2. Mover card para Desenvolvimento (remover aprovacao, adicionar desenvolvimento)
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                name: 'pdlc:aprovacao',
+              });
+            } catch {}
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['pdlc:desenvolvimento'],
+            });
+
             // 2. Postar o comentário com as instruções detalhadas
             const body = [
               '@google-labs-jules A spec desta issue foi aprovada. Por favor, implemente conforme descrito no body acima.',
@@ -37,7 +53,6 @@ jobs:
               '3. Ler `docs/architecture.md` — invariantes de ouro e Definition of Done',
               '',
               '**Sequência obrigatória de labels no board:**',
-              `- Ao iniciar o desenvolvimento: \`gh issue edit ${issueNumber} --repo ${context.repo.owner}/${context.repo.repo} --remove-label "pdlc:aprovacao" --add-label "pdlc:desenvolvimento"\``,
               `- Ao finalizar o desenvolvimento e ANTES de rodar os testes: \`gh issue edit ${issueNumber} --repo ${context.repo.owner}/${context.repo.repo} --remove-label "pdlc:desenvolvimento" --add-label "pdlc:testes"\``,
               '- Ao abrir o PR: o workflow move o card para Code Review automaticamente',
               '',
