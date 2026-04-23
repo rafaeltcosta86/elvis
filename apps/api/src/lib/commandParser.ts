@@ -14,6 +14,8 @@ export type Intent =
   | 'ALIAS_SHORTCUT'
   | 'CREATE_EVENT'
   | 'LIST_CONTACTS'
+  | 'LIST_TASKS'
+  | 'DELETE_CONTACT'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -35,6 +37,11 @@ export function parseCommand(text: string): ParsedCommand {
   // /contatos
   if (/^\/contatos$/i.test(trimmed)) {
     return { intent: 'LIST_CONTACTS' };
+  }
+
+  // /tarefas
+  if (/^\/tarefas$/i.test(trimmed)) {
+    return { intent: 'LIST_TASKS' };
   }
 
   // /hoje
