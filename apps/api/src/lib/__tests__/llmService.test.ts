@@ -100,6 +100,45 @@ describe('classifyIntent', () => {
       owner_alias: 'pai',
     });
   });
+
+  it('returns EDIT_CONTACT for name change', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"EDIT_CONTACT","contact_name":"Siqueira","field":"name","new_value":"Rafa Siqueira"}')
+    );
+    const result = await classifyIntent('mude o nome do Siqueira para Rafa Siqueira');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Siqueira',
+      field: 'name',
+      new_value: 'Rafa Siqueira',
+    });
+  });
+
+  it('returns EDIT_CONTACT for phone change', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"EDIT_CONTACT","contact_name":"Amanda","field":"phone","new_value":"5511988887777"}')
+    );
+    const result = await classifyIntent('altera o telefone da Amanda para 5511988887777');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Amanda',
+      field: 'phone',
+      new_value: '5511988887777',
+    });
+  });
+
+  it('returns EDIT_CONTACT for alias change', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"EDIT_CONTACT","contact_name":"João","field":"alias","new_value":"/jao"}')
+    );
+    const result = await classifyIntent('troca o alias do João para /jao');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'João',
+      field: 'alias',
+      new_value: '/jao',
+    });
+  });
 });
 
 describe('CREATE_EVENT intent', () => {

@@ -2,6 +2,7 @@ export type LLMClassification =
   | { intent: 'REGISTER_ALIAS'; alias: string; contact_name: string }
   | { intent: 'CREATE_CONTACT'; contact_name: string; phone: string; owner_alias?: string }
   | { intent: 'SET_OWNER_ALIAS'; contact_name: string; owner_alias: string }
+  | { intent: 'EDIT_CONTACT'; contact_name: string; field: 'name' | 'alias' | 'phone'; new_value: string }
   | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
   | { intent: 'UNKNOWN' };
 
@@ -20,6 +21,12 @@ Analise a mensagem e retorne JSON com UMA destas estruturas:
 - Alteração de como o dono se identifica com um contato: {"intent":"SET_OWNER_ALIAS","contact_name":"<nome>","owner_alias":"<como o dono quer ser chamado>"}
   Use quando pedirem para mudar/alterar/definir como o dono aparece ou se chama para um contato específico.
   Ex: "agora sou o pai pra Estela", "muda meu nome pra Linic para Rafa", "altere a interação com a Amanda para Amor"
+
+- Edição de contato: {"intent":"EDIT_CONTACT","contact_name":"<nome atual ou alias>","field":"<name|alias|phone>","new_value":"<novo valor>"}
+  Use quando o usuário quiser alterar o nome, alias/atalho ou telefone de um contato existente.
+  Ex: "mude o nome do Siqueira para Rafa Siqueira" -> {"intent":"EDIT_CONTACT","contact_name":"Siqueira","field":"name","new_value":"Rafa Siqueira"}
+  Ex: "altera o telefone da Amanda para 5511988887777" -> {"intent":"EDIT_CONTACT","contact_name":"Amanda","field":"phone","new_value":"5511988887777"}
+  Ex: "troca o alias do João para /jao" -> {"intent":"EDIT_CONTACT","contact_name":"João","field":"alias","new_value":"/jao"}
 
 - Criação de evento no calendário: {"intent":"CREATE_EVENT","title":"<título do evento>","date":"<data no formato YYYY-MM-DD ou relativa como 'quinta','amanhã','sexta'>","time":"<hora no formato HH:MM>","duration_min":<duração em minutos, padrão 60>,"contact_name":"<opcional: nome do participante>"}
   Use quando o usuário quiser agendar, marcar, criar uma reunião, evento, compromisso ou lembrança com hora.
@@ -174,6 +181,19 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
     }
     if (parsed.intent === 'SET_OWNER_ALIAS' && parsed.contact_name && parsed.owner_alias) {
       return { intent: 'SET_OWNER_ALIAS', contact_name: parsed.contact_name, owner_alias: String(parsed.owner_alias) };
+    }
+    if (
+      parsed.intent === 'EDIT_CONTACT' &&
+      parsed.contact_name &&
+      ['name', 'alias', 'phone'].includes(parsed.field) &&
+      parsed.new_value
+    ) {
+      return {
+        intent: 'EDIT_CONTACT',
+        contact_name: String(parsed.contact_name),
+        field: parsed.field as 'name' | 'alias' | 'phone',
+        new_value: String(parsed.new_value),
+      };
     }
     if (parsed.intent === 'CREATE_EVENT' && parsed.title && parsed.date && parsed.time) {
       return {
