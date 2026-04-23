@@ -40,6 +40,7 @@ vi.mock('../../lib/contactService', () => ({
   findByName: vi.fn().mockResolvedValue(null),
   addAlias: vi.fn(),
   listContacts: vi.fn(),
+  updateContact: vi.fn(),
 }));
 
 vi.mock('../../lib/llmService', () => ({
@@ -60,7 +61,13 @@ import { getEmailSummary } from '../../lib/emailService';
 import { getToken } from '../../lib/oauthService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
-import { findByAlias, findByName, addAlias, listContacts } from '../../lib/contactService';
+import {
+  findByAlias,
+  findByName,
+  addAlias,
+  listContacts,
+  updateContact,
+} from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
 import { classifyIntent } from '../../lib/llmService';
 
@@ -259,6 +266,38 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('não encontrado');
+  });
+
+  it('updates contact when LLM detects EDIT_CONTACT intent', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Siqueira',
+      field: 'name',
+      new_value: 'Rafa Siqueira',
+    });
+    (updateContact as any).mockResolvedValue({ name: 'Rafa Siqueira' });
+
+    await webhookPost('mude o nome do Siqueira para Rafa Siqueira');
+
+    expect(classifyIntent).toHaveBeenCalledWith('mude o nome do Siqueira para Rafa Siqueira');
+    expect(updateContact).toHaveBeenCalledWith('Siqueira', 'name', 'Rafa Siqueira');
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Contato atualizado: Rafa Siqueira');
+  });
+
+  it('replies with error when contact not found during EDIT_CONTACT', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Desconhecido',
+      field: 'name',
+      new_value: 'Novo Nome',
+    });
+    (updateContact as any).mockRejectedValue(new Error('Contact "Desconhecido" not found'));
+
+    await webhookPost('mude o nome do Desconhecido para Novo Nome');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Não encontrei nenhum contato');
   });
 
   it('creates task when LLM returns UNKNOWN', async () => {

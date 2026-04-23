@@ -15,6 +15,7 @@ export type Intent =
   | 'CREATE_EVENT'
   | 'LIST_CONTACTS'
   | 'LIST_TASKS'
+  | 'DELETE_CONTACT'
   | 'UNKNOWN';
 
 export interface ParsedCommand {

@@ -14,6 +14,7 @@ import {
   addAlias,
   createContact,
   setOwnerAlias,
+  updateContact,
   listContacts,
   deleteContact,
 } from '../lib/contactService';
@@ -382,6 +383,24 @@ async function handleIncomingWhatsApp(
             responseText = `✅ Pronto! Agora nas mensagens para *${classification.contact_name}* você é *${classification.owner_alias}*.`;
           } catch {
             responseText = `❌ Contato "${classification.contact_name}" não encontrado.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'EDIT_CONTACT') {
+          try {
+            const updated = await updateContact(
+              classification.contact_name,
+              classification.field,
+              classification.new_value
+            );
+            responseText = `✅ Contato atualizado: ${updated.name}`;
+          } catch (err: any) {
+            if (err.code === 'P2002') {
+              responseText = `❌ Erro: Já existe um contato com esse nome ou alias.`;
+            } else {
+              responseText = `❌ Não encontrei nenhum contato com esse nome. Verifique com /contatos.`;
+            }
           }
           break;
         }
