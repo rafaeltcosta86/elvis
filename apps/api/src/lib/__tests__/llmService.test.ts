@@ -137,6 +137,14 @@ describe('classifyIntent', () => {
       contact_name: 'João',
       field: 'alias',
       new_value: '/jao',
+  it('returns DELETE_CONTACT when user wants to remove a contact', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"DELETE_CONTACT","contact_identifier":"Siqueira"}')
+    );
+    const result = await classifyIntent('delete o contato Siqueira');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'DELETE_CONTACT',
+      contact_identifier: 'Siqueira',
     });
   });
 });

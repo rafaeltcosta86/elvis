@@ -69,4 +69,6 @@ export async function updateContact(
     where: { id: contact.id },
     data,
   });
+export async function deleteContact(id: string): Promise<Contact> {
+  return prisma.contact.delete({ where: { id } });
 }

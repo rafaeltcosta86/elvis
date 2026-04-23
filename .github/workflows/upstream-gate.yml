@@ -1,12 +1,9 @@
 name: Upstream PDLC Gate
 
 # Detecta aprovação do PM por comentário em issues no stage de Brainstorming.
-# Quando o PM comenta "aprovado", "approved", "ok" ou "pode detalhar":
-#   → troca pdlc:brainstorming por pdlc:detalhando
+# Quando o PM comenta "aprovado", "ok", seleciona uma opção ("Opção A", "Option B"), etc:
+#   → troca upstream:brainstorming por upstream:detalhando
 #   → o workflow project-automation.yml move o card automaticamente
-#
-# Nota: o agente upstream (Claude Code) ainda precisa ser invocado manualmente
-# para escrever os Acceptance Criteria após o card mover para Detalhar Solução.
 
 on:
   issue_comment:
@@ -15,10 +12,10 @@ on:
 jobs:
   brainstorm-gate:
     name: Comentário do PM → transição brainstorming → detalhando
-    # Só atua em issues (não PRs), com label pdlc:brainstorming, comentário não-bot
+    # Só atua em issues (não PRs), com label upstream:brainstorming, comentário não-bot
     if: |
       github.event.issue.pull_request == null &&
-      contains(github.event.issue.labels.*.name, 'pdlc:brainstorming') &&
+      contains(github.event.issue.labels.*.name, 'upstream:brainstorming') &&
       github.event.comment.user.type != 'Bot'
     runs-on: ubuntu-latest
     permissions:
@@ -30,7 +27,10 @@ jobs:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
             const body = context.payload.comment.body.toLowerCase().trim();
-            const approved = /\b(aprovado|approved|ok|lgtm|pode detalhar)\b/.test(body);
+
+            // Aprovação explícita ou seleção implícita de opção
+            const approved = /\b(aprovado|approved|ok|lgtm|pode detalhar)\b/.test(body)
+              || /\b(op[çc][aã]o|abordagem|option)\s+[abc]\b/.test(body);
 
             if (!approved) {
               console.log('Comentário não contém keyword de aprovação. Nenhuma ação.');
@@ -41,11 +41,11 @@ jobs:
             const issue_number = context.payload.issue.number;
 
             await github.rest.issues.removeLabel({
-              owner, repo, issue_number, name: 'pdlc:brainstorming'
+              owner, repo, issue_number, name: 'upstream:brainstorming'
             }).catch(() => {});
 
             await github.rest.issues.addLabels({
-              owner, repo, issue_number, labels: ['pdlc:detalhando']
+              owner, repo, issue_number, labels: ['upstream:detalhando']
             });
 
-            console.log(`Issue #${issue_number}: brainstorming aprovado pelo PM → pdlc:detalhando`);
+            console.log(`Issue #${issue_number}: brainstorming aprovado pelo PM → upstream:detalhando`);
