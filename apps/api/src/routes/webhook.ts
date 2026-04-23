@@ -395,9 +395,16 @@ async function handleIncomingWhatsApp(
               classification.new_value
             );
             responseText = `✅ Contato atualizado: ${updated.name}`;
-          } catch {
-            responseText = `❌ Não encontrei nenhum contato com esse nome. Verifique com /contatos.`;
+          } catch (err: any) {
+            if (err.code === 'P2002') {
+              responseText = `❌ Erro: Já existe um contato com esse nome ou alias.`;
+            } else {
+              responseText = `❌ Não encontrei nenhum contato com esse nome. Verifique com /contatos.`;
+            }
           }
+          break;
+        }
+
         if (classification.intent === 'DELETE_CONTACT') {
           const identifier = classification.contact_identifier;
           const contact = identifier.startsWith('/')

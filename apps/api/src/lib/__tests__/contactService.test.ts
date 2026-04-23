@@ -186,6 +186,9 @@ describe('updateContact', () => {
   it('throws if contact not found', async () => {
     (prisma.contact.findFirst as any).mockResolvedValue(null);
     await expect(updateContact('Unknown', 'name', 'New Name')).rejects.toThrow('not found');
+  });
+});
+
 describe('deleteContact', () => {
   it('deletes contact by id', async () => {
     (prisma.contact.delete as any).mockResolvedValue(linic);

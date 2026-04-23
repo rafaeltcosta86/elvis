@@ -49,7 +49,7 @@ export async function updateContact(
   const contact = (await findByName(contactName)) || (await findByAlias(contactName));
   if (!contact) throw new Error(`Contact "${contactName}" not found`);
 
-  const data: any = {};
+  const data: { name?: string; phone?: string; aliases?: string[] } = {};
   if (field === 'name') {
     data.name = newValue;
   } else if (field === 'phone') {
@@ -69,6 +69,8 @@ export async function updateContact(
     where: { id: contact.id },
     data,
   });
+}
+
 export async function deleteContact(id: string): Promise<Contact> {
   return prisma.contact.delete({ where: { id } });
 }

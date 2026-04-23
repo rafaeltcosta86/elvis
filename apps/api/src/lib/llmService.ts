@@ -4,7 +4,6 @@ export type LLMClassification =
   | { intent: 'SET_OWNER_ALIAS'; contact_name: string; owner_alias: string }
   | { intent: 'EDIT_CONTACT'; contact_name: string; field: 'name' | 'alias' | 'phone'; new_value: string }
   | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
-  | { intent: 'DELETE_CONTACT'; contact_identifier: string }
   | { intent: 'UNKNOWN' };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -28,9 +27,6 @@ Analise a mensagem e retorne JSON com UMA destas estruturas:
   Ex: "mude o nome do Siqueira para Rafa Siqueira" -> {"intent":"EDIT_CONTACT","contact_name":"Siqueira","field":"name","new_value":"Rafa Siqueira"}
   Ex: "altera o telefone da Amanda para 5511988887777" -> {"intent":"EDIT_CONTACT","contact_name":"Amanda","field":"phone","new_value":"5511988887777"}
   Ex: "troca o alias do João para /jao" -> {"intent":"EDIT_CONTACT","contact_name":"João","field":"alias","new_value":"/jao"}
-- Deleção de contato: {"intent":"DELETE_CONTACT","contact_identifier":"<nome ou alias mencionado>"}
-  Use quando o usuário quiser deletar, remover, apagar ou excluir um contato da lista.
-  Ex: "delete o contato Siqueira", "remove o contato /siqueira", "apaga o contato João da minha lista"
 
 - Criação de evento no calendário: {"intent":"CREATE_EVENT","title":"<título do evento>","date":"<data no formato YYYY-MM-DD ou relativa como 'quinta','amanhã','sexta'>","time":"<hora no formato HH:MM>","duration_min":<duração em minutos, padrão 60>,"contact_name":"<opcional: nome do participante>"}
   Use quando o usuário quiser agendar, marcar, criar uma reunião, evento, compromisso ou lembrança com hora.
@@ -208,9 +204,6 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
         duration_min: typeof parsed.duration_min === 'number' ? parsed.duration_min : 60,
         ...(parsed.contact_name ? { contact_name: String(parsed.contact_name) } : {}),
       };
-    }
-    if (parsed.intent === 'DELETE_CONTACT' && parsed.contact_identifier) {
-      return { intent: 'DELETE_CONTACT', contact_identifier: String(parsed.contact_identifier) };
     }
     return { intent: 'UNKNOWN' };
   } catch {
