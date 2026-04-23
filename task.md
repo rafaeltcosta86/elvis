@@ -437,3 +437,4 @@ pnpm lint && pnpm build
 | 2026-04-10 | M11 [COWORK] concluído: Contact table + migration, contactService, llmService (Groq), ALIAS_SHORTCUT, aprendizado semântico de atalhos — **175 testes passando** ✅ |
 | 2026-04-17 | Performance: Moved dayMap instantiation outside resolveDate in webhook.ts to reduce GC pressure.
 | 2026-04-11 | PDLC [COWORK] concluído: Automação upstream via marcadores HTML e trigger do Jules para `spec:approved` — **231 testes passando** ✅ |
+| 2026-04-17 | Comandos [COWORK] concluído: Adicionado comando `/contatos` para listagem de contatos cadastrados — **235 testes passando** ✅ |

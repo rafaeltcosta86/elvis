@@ -13,6 +13,7 @@ export type Intent =
   | 'CANCEL'
   | 'ALIAS_SHORTCUT'
   | 'CREATE_EVENT'
+  | 'LIST_CONTACTS'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -30,6 +31,11 @@ export interface ParsedCommand {
 
 export function parseCommand(text: string): ParsedCommand {
   const trimmed = text.trim();
+
+  // /contatos
+  if (/^\/contatos$/i.test(trimmed)) {
+    return { intent: 'LIST_CONTACTS' };
+  }
 
   // /hoje
   if (/^\/hoje$/i.test(trimmed)) {

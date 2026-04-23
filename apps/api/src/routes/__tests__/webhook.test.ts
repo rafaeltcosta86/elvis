@@ -39,6 +39,7 @@ vi.mock('../../lib/contactService', () => ({
   findByAlias: vi.fn(),
   findByName: vi.fn().mockResolvedValue(null),
   addAlias: vi.fn(),
+  listContacts: vi.fn(),
 }));
 
 vi.mock('../../lib/llmService', () => ({
@@ -59,7 +60,7 @@ import { getEmailSummary } from '../../lib/emailService';
 import { getToken } from '../../lib/oauthService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
-import { findByAlias, findByName, addAlias } from '../../lib/contactService';
+import { findByAlias, findByName, addAlias, listContacts } from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
 import { classifyIntent } from '../../lib/llmService';
 
@@ -82,6 +83,37 @@ function webhookPost(messageText: string) {
 }
 
 const baseProfile = { id: 'p1', proactivity_level: 3 };
+
+describe('Webhook — LIST_CONTACTS', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+  });
+
+  it('retorna mensagem de lista vazia quando não há contatos', async () => {
+    (listContacts as any).mockResolvedValue([]);
+
+    await webhookPost('/contatos');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Nenhum contato cadastrado');
+  });
+
+  it('retorna lista de contatos formatada', async () => {
+    (listContacts as any).mockResolvedValue([
+      { name: 'João Silva', aliases: ['/joao'] },
+      { name: 'Maria Costa', aliases: ['/maria'] },
+    ]);
+
+    await webhookPost('/contatos');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Seus contatos (2)');
+    expect(sentText).toContain('João Silva — /joao');
+    expect(sentText).toContain('Maria Costa — /maria');
+  });
+});
 
 describe('Webhook — proactivity commands', () => {
   beforeEach(() => {
