@@ -32,7 +32,7 @@ vi.mock('../../lib/oauthService', () => ({
   getToken: vi.fn(),
 }));
 
-vi.mock('@shared', () => ({
+vi.mock('@elvis/shared', () => ({
   getCalendarEventsForToday: vi.fn(),
 }));
 
