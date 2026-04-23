@@ -11,15 +11,50 @@ on:
 env:
   PROJECT_ID: PVT_kwHODpFFL84BUuhX
   STATUS_FIELD_ID: PVTSSF_lAHODpFFL84BUuhXzhCrC38
+  STATUS_IDEIA: "cc3d54a1"         # 💡 Ideia
   STATUS_EXPLORACAO: "cbd82d6d"    # 🔍 Exploração
   STATUS_BRAINSTORMING: "ebae8a7e" # 🧠 Brainstorming
   STATUS_DETALHANDO: "e3f3434b"    # 📐 Detalhar Solução
   STATUS_APROVACAO: "56bca1f4"     # ✅ Aprovação
+  STATUS_DESENVOLVIMENTO: "6fe4ef2d" # ⚙️ Desenvolvimento
+  STATUS_TESTES: "82e693e6"          # 🧪 Testes
   STATUS_CODE_REVIEW: "bf3041ab"   # 👁 Code Review
   STATUS_PULL_REQUEST: "f7c08ab8"  # 🔀 Pull Request
   STATUS_PRODUCAO: "c724aa2c"      # 🚀 Produção
 
 jobs:
+  move-violation-to-board:
+    name: Violação detectada → 💡 Ideia
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'architecture-violation'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Adicionar issue ao board na coluna Ideia
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const issueNodeId = context.payload.issue.node_id;
+            const addResult = await github.graphql(`
+              mutation($p: ID!, $c: ID!) {
+                addProjectV2ItemById(input: {projectId: $p, contentId: $c}) { item { id } }
+              }`, { p: process.env.PROJECT_ID, c: issueNodeId });
+
+            if (!addResult.addProjectV2ItemById.item) {
+              console.log('Não foi possível adicionar/recuperar o item no board.');
+              return;
+            }
+
+            const itemId = addResult.addProjectV2ItemById.item.id;
+            await github.graphql(`
+              mutation($p: ID!, $i: ID!, $f: ID!, $v: ProjectV2FieldValue!) {
+                updateProjectV2ItemFieldValue(input: {projectId: $p, itemId: $i, fieldId: $f, value: $v}) {
+                  projectV2Item { id }
+                }
+              }`, { p: process.env.PROJECT_ID, i: itemId, f: process.env.STATUS_FIELD_ID,
+                    v: { singleSelectOptionId: process.env.STATUS_IDEIA } });
+
+            console.log(`Issue #${context.payload.issue.number} movida para 💡 Ideia`);
+
   move-card-on-pdlc-label:
     name: Label pdlc:* → mover card upstream
     if: github.event_name == 'issues' && startsWith(github.event.label.name, 'pdlc:')
@@ -32,10 +67,12 @@ jobs:
           script: |
             const label = context.payload.label.name;
             const statusMap = {
-              'pdlc:exploracao':    process.env.STATUS_EXPLORACAO,
-              'pdlc:brainstorming': process.env.STATUS_BRAINSTORMING,
-              'pdlc:detalhando':    process.env.STATUS_DETALHANDO,
-              'pdlc:aprovacao':     process.env.STATUS_APROVACAO,
+              'pdlc:exploracao':      process.env.STATUS_EXPLORACAO,
+              'pdlc:brainstorming':   process.env.STATUS_BRAINSTORMING,
+              'pdlc:detalhando':      process.env.STATUS_DETALHANDO,
+              'pdlc:aprovacao':       process.env.STATUS_APROVACAO,
+              'pdlc:desenvolvimento': process.env.STATUS_DESENVOLVIMENTO,
+              'pdlc:testes':          process.env.STATUS_TESTES,
             };
             const optionId = statusMap[label];
             if (!optionId) { console.log(`Label ${label} sem mapeamento.`); return; }
