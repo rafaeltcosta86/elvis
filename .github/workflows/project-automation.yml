@@ -55,9 +55,9 @@ jobs:
 
             console.log(`Issue #${context.payload.issue.number} movida para 💡 Ideia`);
 
-  move-card-on-pdlc-label:
-    name: Label pdlc:* → mover card upstream
-    if: github.event_name == 'issues' && startsWith(github.event.label.name, 'pdlc:')
+  move-card-on-upstream-label:
+    name: Label upstream:* → mover card
+    if: github.event_name == 'issues' && startsWith(github.event.label.name, 'upstream:')
     runs-on: ubuntu-latest
     steps:
       - name: Mapear label para coluna e mover card
@@ -67,12 +67,12 @@ jobs:
           script: |
             const label = context.payload.label.name;
             const statusMap = {
-              'pdlc:exploracao':      process.env.STATUS_EXPLORACAO,
-              'pdlc:brainstorming':   process.env.STATUS_BRAINSTORMING,
-              'pdlc:detalhando':      process.env.STATUS_DETALHANDO,
-              'pdlc:aprovacao':       process.env.STATUS_APROVACAO,
-              'pdlc:desenvolvimento': process.env.STATUS_DESENVOLVIMENTO,
-              'pdlc:testes':          process.env.STATUS_TESTES,
+              'upstream:exploracao':      process.env.STATUS_EXPLORACAO,
+              'upstream:brainstorming':   process.env.STATUS_BRAINSTORMING,
+              'upstream:detalhando':      process.env.STATUS_DETALHANDO,
+              'upstream:aprovacao':       process.env.STATUS_APROVACAO,
+              'upstream:desenvolvimento': process.env.STATUS_DESENVOLVIMENTO,
+              'upstream:testes':          process.env.STATUS_TESTES,
             };
             const optionId = statusMap[label];
             if (!optionId) { console.log(`Label ${label} sem mapeamento.`); return; }

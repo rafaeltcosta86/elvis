@@ -40,18 +40,18 @@ O agente upstream (Claude Code) sinaliza a progressão de um card adicionando um
 
 | Stage | Label | Quando adicionar |
 |---|---|---|
-| Exploração | `pdlc:exploracao` | Ao iniciar a análise de código/contexto |
-| Brainstorming | `pdlc:brainstorming` | Ao apresentar abordagens ao PM |
-| Detalhar Solução | `pdlc:detalhando` | Após aprovação do brainstorm (Gate 1) |
-| Aprovação | `pdlc:aprovacao` | Quando a spec está pronta para revisão |
+| Exploração | `upstream:exploracao` | Ao iniciar a análise de código/contexto |
+| Brainstorming | `upstream:brainstorming` | Ao apresentar abordagens ao PM |
+| Detalhar Solução | `upstream:detalhando` | Após aprovação do brainstorm (Gate 1) |
+| Aprovação | `upstream:aprovacao` | Quando a spec está pronta para revisão |
 
 ```bash
 # Exemplo — mover card da issue #35 para Exploração
-gh issue edit 35 --repo rafaeltcosta86/elvis --add-label "pdlc:exploracao"
+gh issue edit 35 --repo rafaeltcosta86/elvis --add-label "upstream:exploracao"
 ```
 
 O workflow `project-automation.yml` detecta a label e move o card no board automaticamente.
-Remova labels `pdlc:*` anteriores ao adicionar a nova (uma label por vez é suficiente).
+Remova labels `upstream:*` anteriores ao adicionar a nova (uma label por vez é suficiente).
 
 ## Workflow obrigatório para correção de violações
 
