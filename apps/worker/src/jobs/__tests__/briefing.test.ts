@@ -39,6 +39,10 @@ vi.mock('@shared', () => ({
 describe('briefingJob', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    // 2024-01-01 07:30 BRT
+    vi.setSystemTime(new Date('2024-01-01T10:30:00Z'));
+
     process.env.OWNER_PHONE = '551199999999';
     process.env.OAUTH_ENC_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 
@@ -47,6 +51,10 @@ describe('briefingJob', () => {
     });
     (prisma.auditLog.count as any).mockResolvedValue(0);
     (prisma.task.findMany as any).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('AC1: sends briefing with events when token and events exist', async () => {
@@ -67,12 +75,13 @@ describe('briefingJob', () => {
       },
     ]);
 
-    const tomorrow = new Date();
+    const today = new Date('2024-01-01T10:30:00Z');
+    const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     (prisma.task.findMany as any).mockResolvedValue([
       { id: '1', title: 'Revisar proposta', priority: 'URGENT', status: 'PENDING', due_at: null },
-      { id: '2', title: 'Confirmar reunião', priority: 'HIGH', status: 'PENDING', due_at: new Date() },
+      { id: '2', title: 'Confirmar reunião', priority: 'HIGH', status: 'PENDING', due_at: today },
       { id: '3', title: 'Longe', priority: 'LOW', status: 'PENDING', due_at: tomorrow },
     ]);
 

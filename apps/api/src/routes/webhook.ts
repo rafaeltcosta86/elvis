@@ -8,7 +8,14 @@ import { addDays, nextMonday, nextDay, format, parseISO, setHours, setMinutes } 
 import { utcToZonedTime } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
-import { findByAlias, findByName, addAlias, createContact, setOwnerAlias } from '../lib/contactService';
+import {
+  findByAlias,
+  findByName,
+  addAlias,
+  createContact,
+  setOwnerAlias,
+  listContacts,
+} from '../lib/contactService';
 import { classifyIntent, suggestAction, normalizeAudioCommand } from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
@@ -130,6 +137,23 @@ async function handleIncomingWhatsApp(
   let responseText = '';
 
   switch (intent) {
+      case 'LIST_CONTACTS': {
+        const contacts = await listContacts();
+        if (contacts.length === 0) {
+          responseText = '📋 Nenhum contato cadastrado.';
+        } else {
+          const list = contacts
+            .map((c) => {
+              const alias = c.aliases[0] || '';
+              const formattedAlias = alias.startsWith('/') ? alias : `/${alias}`;
+              return `• ${c.name} — ${formattedAlias}`;
+            })
+            .join('\n');
+          responseText = `📋 Seus contatos (${contacts.length}):\n${list}`;
+        }
+        break;
+      }
+
       case 'TODAY': {
         const today = utcToZonedTime(new Date(), TIMEZONE);
         const todayDate = new Date(

@@ -1,6 +1,16 @@
 import { parseCommand } from '../commandParser';
 
 describe('parseCommand', () => {
+  describe('/contatos', () => {
+    it('returns LIST_CONTACTS intent for /contatos', () => {
+      expect(parseCommand('/contatos')).toEqual({ intent: 'LIST_CONTACTS' });
+    });
+
+    it('returns LIST_CONTACTS intent for /CONTATOS (case-insensitive)', () => {
+      expect(parseCommand('/CONTATOS')).toEqual({ intent: 'LIST_CONTACTS' });
+    });
+  });
+
   describe('/hoje', () => {
     it('returns TODAY intent for /hoje', () => {
       expect(parseCommand('/hoje')).toEqual({ intent: 'TODAY' });
