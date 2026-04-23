@@ -23,7 +23,7 @@ env:
 jobs:
   move-violation-to-board:
     name: Violação detectada → 💡 Ideia
-    if: github.event_name == 'issues' && github.event.label.name == 'architecture-violation'
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'architecture-violation'
     runs-on: ubuntu-latest
     steps:
       - name: Adicionar issue ao board na coluna Ideia
@@ -36,6 +36,11 @@ jobs:
               mutation($p: ID!, $c: ID!) {
                 addProjectV2ItemById(input: {projectId: $p, contentId: $c}) { item { id } }
               }`, { p: process.env.PROJECT_ID, c: issueNodeId });
+
+            if (!addResult.addProjectV2ItemById.item) {
+              console.log('Não foi possível adicionar/recuperar o item no board.');
+              return;
+            }
 
             const itemId = addResult.addProjectV2ItemById.item.id;
             await github.graphql(`
