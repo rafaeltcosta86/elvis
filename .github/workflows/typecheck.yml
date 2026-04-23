@@ -23,5 +23,8 @@ jobs:
       - name: Build @elvis/shared
         run: pnpm --filter @elvis/shared build
 
+      - name: Gerar Prisma Client
+        run: pnpm --filter api exec prisma generate
+
       - name: Typecheck
         run: pnpm -r --filter '!@elvis/shared' typecheck
