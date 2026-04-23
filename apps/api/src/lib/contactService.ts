@@ -40,3 +40,7 @@ export async function setOwnerAlias(contactName: string, alias: string): Promise
 export async function listContacts(): Promise<Contact[]> {
   return prisma.contact.findMany();
 }
+
+export async function deleteContact(id: string): Promise<Contact> {
+  return prisma.contact.delete({ where: { id } });
+}
