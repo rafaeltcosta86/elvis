@@ -3,8 +3,8 @@ export type LLMClassification =
   | { intent: 'CREATE_CONTACT'; contact_name: string; phone: string; owner_alias?: string }
   | { intent: 'SET_OWNER_ALIAS'; contact_name: string; owner_alias: string }
   | { intent: 'EDIT_CONTACT'; contact_name: string; field: 'name' | 'alias' | 'phone'; new_value: string }
-  | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
   | { intent: 'DELETE_CONTACT'; contact_identifier: string }
+  | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
   | { intent: 'UNKNOWN' };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
