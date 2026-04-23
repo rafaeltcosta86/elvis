@@ -143,7 +143,11 @@ async function handleIncomingWhatsApp(
           responseText = '📋 Nenhum contato cadastrado.';
         } else {
           const list = contacts
-            .map((c) => `• ${c.name} — ${c.aliases[0] || ''}`)
+            .map((c) => {
+              const alias = c.aliases[0] || '';
+              const formattedAlias = alias.startsWith('/') ? alias : `/${alias}`;
+              return `• ${c.name} — ${formattedAlias}`;
+            })
             .join('\n');
           responseText = `📋 Seus contatos (${contacts.length}):\n${list}`;
         }

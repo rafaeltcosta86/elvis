@@ -113,6 +113,17 @@ describe('Webhook — LIST_CONTACTS', () => {
     expect(sentText).toContain('João Silva — /joao');
     expect(sentText).toContain('Maria Costa — /maria');
   });
+
+  it('formata alias com / se não estiver presente', async () => {
+    (listContacts as any).mockResolvedValue([
+      { name: 'Pedro Alves', aliases: ['pedro_alves'] },
+    ]);
+
+    await webhookPost('/contatos');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Pedro Alves — /pedro_alves');
+  });
 });
 
 describe('Webhook — proactivity commands', () => {
