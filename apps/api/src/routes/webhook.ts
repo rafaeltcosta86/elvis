@@ -16,11 +16,12 @@ import {
   setOwnerAlias,
   listContacts,
 } from '../lib/contactService';
-import { classifyIntent, suggestAction, normalizeAudioCommand } from '../lib/llmService';
+import { classifyIntent, suggestAction, normalizeAudioCommand, extractReminder } from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
 import redis from '../lib/redis';
+import { zonedTimeToUtc } from 'date-fns-tz';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
@@ -133,6 +134,46 @@ async function handleIncomingWhatsApp(
   sender_id: string,
   message_text: string
 ): Promise<string> {
+  const pendingConfirmation = await getPending(sender_id);
+
+  // AC4 - Check snooze logic before parseCommand, but AFTER pending confirmation check
+  if (!pendingConfirmation) {
+    const pendingSnooze = await redis.get(`pending:snooze:${sender_id}`);
+    if (pendingSnooze && ['1', '2', '3'].includes(message_text.trim())) {
+      const { reminderId, originalHour, originalMinute } = JSON.parse(pendingSnooze) as {
+        reminderId: string;
+        originalHour: number;
+        originalMinute: number;
+      };
+
+      const now = utcToZonedTime(new Date(), TIMEZONE);
+      let newRemindAtBRT: Date;
+      const option = message_text.trim();
+
+      if (option === '1') {
+        newRemindAtBRT = addDays(now, 0);
+        newRemindAtBRT.setHours(now.getHours() + 1);
+      } else if (option === '2') {
+        newRemindAtBRT = addDays(now, 0);
+        newRemindAtBRT.setHours(now.getHours() + 4);
+      } else { // option 3
+        newRemindAtBRT = addDays(now, 1);
+        newRemindAtBRT.setHours(originalHour, originalMinute, 0, 0);
+      }
+
+      const newRemindAtUTC = zonedTimeToUtc(newRemindAtBRT, TIMEZONE);
+
+      await prisma.reminder.update({
+        where: { id: reminderId },
+        data: { remind_at: newRemindAtUTC, status: 'SCHEDULED' }
+      });
+
+      await redis.del(`pending:snooze:${sender_id}`);
+
+      return `✅ Lembrete reagendado para ${format(newRemindAtBRT, 'dd/MM/yyyy')} às ${format(newRemindAtBRT, 'HH:mm')} (BRT).`;
+    }
+  }
+
   const { intent, args } = parseCommand(message_text);
   let responseText = '';
 
@@ -371,7 +412,24 @@ async function handleIncomingWhatsApp(
           },
         });
 
-        responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+        // AC1 - Extraction of reminder
+        const reminderExtraction = await extractReminder(args?.rawText ?? '', TIMEZONE);
+        let reminderNote = '';
+
+        if (reminderExtraction?.remind_at) {
+          await prisma.reminder.create({
+            data: {
+              task_id: newTask.id,
+              remind_at: new Date(reminderExtraction.remind_at),
+              channel: 'whatsapp',
+              status: 'SCHEDULED'
+            }
+          });
+        } else {
+          reminderNote = '\n⚠️ Não consegui identificar data/hora para o lembrete. A tarefa foi criada sem lembrete.';
+        }
+
+        responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow${reminderNote}`;
         break;
       }
 

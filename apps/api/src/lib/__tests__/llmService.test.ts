@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-import { classifyIntent, normalizeAudioCommand, type LLMClassification } from '../llmService';
+import { classifyIntent, normalizeAudioCommand, extractReminder, type LLMClassification } from '../llmService';
 
 function groqResponse(content: string) {
   return {
@@ -222,5 +222,39 @@ describe('normalizeAudioCommand', () => {
     // verifica que o prompt enviado contém "Rafa"
     const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
     expect(body.messages[0].content).toContain('Rafa');
+  });
+});
+
+describe('extractReminder', () => {
+  it('returns ISO UTC string when LLM extracts date/time', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"remind_at":"2024-05-21T10:00:00Z"}')
+    );
+
+    const result = await extractReminder('me lembre de comprar pão amanhã às 10h', 'America/Sao_Paulo');
+
+    expect(result).toEqual({ remind_at: '2024-05-21T10:00:00Z' });
+  });
+
+  it('returns null when LLM cannot extract date/time', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"remind_at":null}')
+    );
+
+    const result = await extractReminder('comprar pão', 'America/Sao_Paulo');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when API key is missing', async () => {
+    delete process.env.GROQ_API_KEY;
+    const result = await extractReminder('amanhã 10h', 'America/Sao_Paulo');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when fetch throws', async () => {
+    mockFetch.mockRejectedValue(new Error('network error'));
+    const result = await extractReminder('amanhã 10h', 'America/Sao_Paulo');
+    expect(result).toBeNull();
   });
 });

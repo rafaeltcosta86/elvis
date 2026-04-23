@@ -13,7 +13,8 @@ export async function initScheduler(
   checkinHandler: (job: any) => Promise<void>,
   reviewHandler: (job: any) => Promise<void>,
   emailHandler: (job: any) => Promise<void>,
-  weeklyReportHandler: (job: any) => Promise<void>
+  weeklyReportHandler: (job: any) => Promise<void>,
+  reminderHandler: (job: any) => Promise<void>
 ): Promise<Worker> {
   // Create worker
   const worker = new Worker('scheduler', async (job) => {
@@ -37,6 +38,9 @@ export async function initScheduler(
         break;
       case 'weeklyReport':
         await weeklyReportHandler(job);
+        break;
+      case 'reminder':
+        await reminderHandler(job);
         break;
       case 'queueHealthCheck':
         await checkQueueHealth();
@@ -128,8 +132,20 @@ export async function initScheduler(
     }
   );
 
+  await schedulerQueue.add(
+    'reminder',
+    {},
+    {
+      repeat: {
+        pattern: '* * * * *', // every minute
+        tz: 'America/Sao_Paulo',
+      },
+      removeOnComplete: true,
+    }
+  );
+
   console.log('scheduler initialized');
-  console.log('6 cron jobs registered: briefing (07:30), checkin (13:30), review (20:00), emailSummary (18:00), weeklyReport (Sun 20:00), queueHealthCheck (hourly)');
+  console.log('7 cron jobs registered: briefing (07:30), checkin (13:30), review (20:00), emailSummary (18:00), weeklyReport (Sun 20:00), queueHealthCheck (hourly), reminder (every minute)');
 
   return worker;
 }
