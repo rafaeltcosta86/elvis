@@ -159,6 +159,23 @@ async function handleIncomingWhatsApp(
         break;
       }
 
+      case 'LIST_TASKS': {
+        const tasks = await prisma.task.findMany({
+          where: { status: { in: ['PENDING', 'IN_PROGRESS'] } },
+          orderBy: { created_at: 'asc' },
+        });
+
+        if (tasks.length === 0) {
+          responseText = 'Nenhuma tarefa pendente, pode relaxar! 😎';
+        } else {
+          const list = tasks
+            .map((t, index) => `${index + 1}. ${t.title}`)
+            .join('\n');
+          responseText = list;
+        }
+        break;
+      }
+
       case 'TODAY': {
         const today = utcToZonedTime(new Date(), TIMEZONE);
         const todayDate = new Date(
