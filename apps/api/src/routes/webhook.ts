@@ -23,6 +23,7 @@ import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
 import redis from '../lib/redis';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
@@ -661,7 +662,7 @@ async function processWebhook(
     await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
-    console.error(`Webhook ${provider} error:`, err);
+    console.error(`Webhook ${provider} error:`, sanitizeError(err));
     res.json({ ok: true });
   }
 }
@@ -739,7 +740,7 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
 
     res.json({ ok: true });
   } catch (err) {
-    console.error('Webhook baileys-audio error:', err);
+    console.error('Webhook baileys-audio error:', sanitizeError(err));
     res.json({ ok: true });
   }
 });

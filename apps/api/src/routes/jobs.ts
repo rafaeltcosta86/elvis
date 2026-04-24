@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { Queue } from 'bullmq';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.post('/jobs/:name/trigger', async (req, res) => {
       jobName: name,
     });
   } catch (err) {
-    console.error('POST /jobs/:name/trigger error:', err);
+    console.error('POST /jobs/:name/trigger error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
