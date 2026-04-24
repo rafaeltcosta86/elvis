@@ -212,39 +212,7 @@ describe('normalizeAudioCommand', () => {
     expect(result).toBe('manda para Amanda: oi');
   });
 
-  it('reformula perspectiva: "Diga para Estela que o RG dela está na casa da Karen"', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: seu RG está na casa da Karen'));
-    const result = await normalizeAudioCommand('Diga para Estela que o RG dela está na casa da Karen');
-    expect(result).toBe('manda para Estela: seu RG está na casa da Karen');
-  });
 
-  it('usa "mandou dizer" ao repassar informação com nome próprio (sem redundância)', async () => {
-    process.env.OWNER_NAME = 'Rafael';
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: Rafael mandou dizer que seu RG está na casa da Karen'));
-    const result = await normalizeAudioCommand('Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen');
-    expect(result).toBe('manda para Estela: Rafael mandou dizer que seu RG está na casa da Karen');
-  });
-
-  it('usa "teu pai pediu pra você" ao repassar pedido com título de parentesco', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: teu pai pediu pra você voltar a colocar as vogais nas palavras'));
-    const result = await normalizeAudioCommand(
-      'diga para a Estela que eu pedi para ela voltar a colocar as vogais nas palavras',
-      'pai'
-    );
-    expect(result).toBe('manda para Estela: teu pai pediu pra você voltar a colocar as vogais nas palavras');
-    // verifica que o prompt usa "teu pai" e não só "pai"
-    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.messages[0].content).toContain('teu pai');
-  });
-
-  it('usa "teu pai mandou dizer" ao repassar informação com título de parentesco', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: teu pai mandou dizer que seu RG está na casa da Karen'));
-    const result = await normalizeAudioCommand(
-      'fala pra Estela que o RG dela tá na casa da Karen',
-      'pai'
-    );
-    expect(result).toBe('manda para Estela: teu pai mandou dizer que seu RG está na casa da Karen');
-  });
 
   it('retorna texto limpo para comandos sem envio: "lembra de comprar pão"', async () => {
     mockFetch.mockResolvedValue(groqResponse('comprar pão'));
@@ -265,14 +233,6 @@ describe('normalizeAudioCommand', () => {
     expect(result).toBe('Manda um oi pra Amanda.');
   });
 
-  it('usa ownerAlias do contato quando fornecido', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Linic: Rafa chega às 18h'));
-    const result = await normalizeAudioCommand('Fala pra Linic que eu chego às 18h', 'Rafa');
-    expect(result).toBe('manda para Linic: Rafa chega às 18h');
-    // verifica que o prompt enviado contém "Rafa"
-    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.messages[0].content).toContain('Rafa');
-  });
 });
 
 describe('INTRODUCE_SELF intent', () => {

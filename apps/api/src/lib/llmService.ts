@@ -6,11 +6,17 @@ export type LLMClassification =
   | { intent: 'DELETE_CONTACT'; contact_identifier: string }
   | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
   | { intent: 'INTRODUCE_SELF'; contact_name: string; context?: string }
+  | { intent: 'SEND_MESSAGE'; contact_name: string; message: string }
   | { intent: 'UNKNOWN' };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const PROMPT_SYSTEM = `Você é um classificador de intenções para um assistente pessoal chamado Elvis.
 Analise a mensagem e retorne JSON com UMA destas estruturas:
+
+- Enviar mensagem para um contato: {"intent":"SEND_MESSAGE","contact_name":"<nome>","message":"<mensagem exata do usuário>"}
+  Use quando o usuário quiser mandar uma mensagem, falar algo, avisar ou perguntar algo a alguém.
+  IMPORTANTE: Extraia a mensagem FIELMENTE ao que o usuário disse, preservando o tom (pergunta, afirmação, etc.).
+  Ex: "manda uma mensagem para o Guilherme perguntando se ele já instalou o Claude Code" -> {"intent":"SEND_MESSAGE","contact_name":"Guilherme","message":"perguntando se ele já instalou o Claude Code"}
 
 - Criação de NOVO contato com número de telefone: {"intent":"CREATE_CONTACT","contact_name":"<nome>","phone":"<somente dígitos, ex: 5511999990000>","owner_alias":"<opcional: como o dono quer ser chamado por este contato>"}
   Use quando a mensagem contiver um número de telefone E o usuário quiser cadastrar/criar/adicionar um contato.
@@ -92,28 +98,15 @@ export async function suggestAction(text: string): Promise<SuggestedAction> {
 }
 
 function buildNormalizePrompt(ownerName: string): string {
-  // Se ownerName for título de parentesco, usar com possessivo (ex: "teu pai")
-  const KINSHIP = ['pai', 'mãe', 'mae', 'tio', 'tia', 'avô', 'avo', 'avó', 'irmão', 'irmao', 'irmã', 'irma'];
-  const isKinship = KINSHIP.includes(ownerName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-  const ownerRef = isKinship ? `teu ${ownerName}` : ownerName;
-
   return `Você é o assistente Elvis. Converte transcrições de áudio do dono (${ownerName}) em comandos estruturados.
 
 Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
-  IMPORTANTE — reformule a mensagem na perspectiva de quem vai receber:
-  - Troque pronomes de primeira pessoa pela referência correta ao dono: "${ownerRef}"
-  - Troque "dela" / "seu" para o destinatário conforme o contexto
-  - Se o dono pedir para alguém FAZER algo: use "${ownerRef} pediu pra você [ação no infinitivo]"
-  - Se o dono quiser repassar uma INFORMAÇÃO em seu nome: use "${ownerRef} mandou dizer que [fato]"
-  - Se o dono fala algo sobre si mesmo (chega, vai, está): use "${ownerRef} [ação]"
-  - NÃO use dois pontos após "pediu" ou "mandou dizer". NÃO repita "ele pediu" ou "eu pedi" no conteúdo.
-  - A mensagem final deve soar natural, como se fosse enviada diretamente pelo assistente
-  Exemplos (dono = ${ownerName}, referência = ${ownerRef}):
+  IMPORTANTE: Extraia a mensagem FIELMENTE ao que o usuário disse.
+  NÃO adicione framing como "${ownerName} mandou dizer" ou "${ownerName} pediu".
+  Exemplos:
     "Manda um oi pra Amanda" → "manda para Amanda: oi"
     "Diga para Estela que o RG dela está na casa da Karen" → "manda para Estela: seu RG está na casa da Karen"
-    "Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen" → "manda para Estela: ${ownerRef} mandou dizer que seu RG está na casa da Karen"
-    "Fala pra Estela que eu pedi para ela voltar a colocar as vogais nas palavras" → "manda para Estela: ${ownerRef} pediu pra você voltar a colocar as vogais nas palavras"
-    "Fala pra João que eu chego às 18h" → "manda para João: ${ownerRef} chega às 18h"
+    "Fala pra João que eu chego às 18h" → "manda para João: eu chego às 18h"
 
 Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
   "Lembra de comprar pão amanhã" → "comprar pão amanhã"
@@ -226,10 +219,45 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
         ...(parsed.context ? { context: String(parsed.context) } : {}),
       };
     }
+    if (parsed.intent === 'SEND_MESSAGE' && parsed.contact_name && parsed.message) {
+      return {
+        intent: 'SEND_MESSAGE',
+        contact_name: String(parsed.contact_name),
+        message: String(parsed.message),
+      };
+    }
     return { intent: 'UNKNOWN' };
   } catch {
     return { intent: 'UNKNOWN' };
   }
+}
+
+export function substitutePronouns(text: string): string {
+  const mapping: Record<string, string> = {
+    'eu': 'você',
+    'meu': 'seu',
+    'me': 'te',
+    'minha': 'sua',
+    'meus': 'seus',
+    'minhas': 'suas',
+    'mim': 'você',
+  };
+
+  let result = text;
+  for (const [from, to] of Object.entries(mapping)) {
+    // Word boundary regex to avoid partial matches (e.g., 'me' in 'amém')
+    // Supporting case-insensitive matching but simple substitution
+    const regex = new RegExp(`\\b${from}\\b`, 'gi');
+    result = result.replace(regex, (match) => {
+      // Basic case preservation: if original was capitalized, capitalize replacement
+      if (match[0] === match[0].toUpperCase()) {
+        return to.charAt(0).toUpperCase() + to.slice(1);
+      }
+      return to;
+    });
+  }
+
+  return result;
 }
 
 export async function generateIntroduction(
