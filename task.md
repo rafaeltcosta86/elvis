@@ -444,3 +444,4 @@ pnpm lint && pnpm build
 | 2026-04-24 | Testing [COWORK] concluído: Adicionados testes unitários para MockAdapter em packages/shared. |
 | 2026-04-25 | Feat [COWORK] concluído: Elvis se apresenta para um contato (INTRODUCE_SELF) com contexto opcional e geração via LLM — **306 testes passando** ✅ |
 | 2026-04-25 | Fix [COWORK] concluído: Adicionado parâmetro `prompt` no Whisper para melhorar transcrição de nomes próprios. |
+| 2026-05-15 | Reminders [COWORK] concluído: Implementação de lembretes automáticos na criação de tarefas, job de disparo e snooze (1h, 4h, amanhã) — **M12 completo** ✅ |
