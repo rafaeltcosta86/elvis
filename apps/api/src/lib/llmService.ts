@@ -115,7 +115,15 @@ export async function suggestAction(text: string): Promise<SuggestedAction> {
 function buildNormalizePrompt(ownerName: string): string {
   return `Você é o assistente Elvis. Converte transcrições de áudio do dono (${ownerName}) em comandos estruturados.
 
-Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
+PRIORIDADE 1 — Se o dono pede para ELVIS se apresentar a alguém: responda APENAS com o texto original sem alteração.
+  Sinais: "se apresente", "se apresenta", "se introduz", "se introduza" — com Elvis como sujeito.
+  ATENÇÃO: NÃO confunda com enviar mensagem. Elvis se apresentar ≠ mandar mensagem.
+  Exemplos:
+    "Elvis, se apresente para o Guilherme" → "Elvis, se apresente para o Guilherme"
+    "se apresenta pro João" → "se apresenta pro João"
+    "Elvis, se introduz para a Ana" → "Elvis, se introduz para a Ana"
+
+PRIORIDADE 2 — Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
   IMPORTANTE: Extraia a mensagem FIELMENTE ao que o usuário disse.
   NÃO adicione framing como "${ownerName} mandou dizer" ou "${ownerName} pediu".
   Exemplos:
@@ -123,7 +131,7 @@ Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <no
     "Diga para Estela que o RG dela está na casa da Karen" → "manda para Estela: seu RG está na casa da Karen"
     "Fala pra João que eu chego às 18h" → "manda para João: eu chego às 18h"
 
-Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
+PRIORIDADE 3 — Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
   "Lembra de comprar pão amanhã" → "comprar pão amanhã"
 
 Responda APENAS com o comando normalizado. Nenhum texto adicional.`;
