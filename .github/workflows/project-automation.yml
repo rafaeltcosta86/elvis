@@ -25,7 +25,7 @@ env:
 jobs:
   move-violation-to-board:
     name: Violação detectada → 💡 Ideia
-    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'stage:architecture-violation'
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'architecture-violation'
     runs-on: ubuntu-latest
     steps:
       - name: Adicionar issue ao board na coluna Ideia
