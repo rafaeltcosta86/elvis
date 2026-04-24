@@ -174,6 +174,53 @@ export async function normalizeAudioCommand(text: string, ownerAlias?: string): 
   }
 }
 
+export async function extractReminder(text: string, timezone: string): Promise<{ remind_at: string } | null> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  const now = new Date().toISOString();
+  const prompt = `Você é um extrator de data/hora para lembretes.
+O horário atual em UTC é: ${now}
+O fuso horário do usuário é: ${timezone}
+
+Dada a mensagem do usuário, identifique se ele mencionou uma data e hora para ser lembrado de uma tarefa que está criando.
+Retorne um JSON: {"remind_at": "ISO_UTC_DATETIME"} ou {"remind_at": null} se não encontrar.
+Se o usuário disser "amanhã as 10h", calcule a data correta baseada no horário atual e no timezone, e retorne em UTC.
+Se o usuário não especificar hora, mas especificar dia, assuma 09:00 no fuso do usuário.
+
+Mensagem: "${text}"`;
+
+  try {
+    const res = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: prompt },
+        ],
+        temperature: 0,
+        max_tokens: 100,
+        response_format: { type: 'json_object' }
+      }),
+    });
+
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = data?.choices?.[0]?.message?.content ?? '';
+    const parsed = JSON.parse(content);
+
+    if (parsed.remind_at) {
+      return { remind_at: parsed.remind_at };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function classifyIntent(text: string): Promise<LLMClassification> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return { intent: 'UNKNOWN' };

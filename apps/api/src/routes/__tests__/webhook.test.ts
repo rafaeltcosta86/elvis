@@ -47,6 +47,7 @@ vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
   generateIntroduction: vi.fn(),
+  extractReminder: vi.fn(),
 }));
 
 vi.mock('../../lib/oauthService', () => ({

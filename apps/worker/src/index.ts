@@ -5,6 +5,7 @@ import { checkinJob } from './jobs/checkin';
 import { reviewJob } from './jobs/review';
 import { emailSummaryJob } from './jobs/emailSummary';
 import { weeklyReportJob } from './jobs/weeklyReport';
+import { reminderJob } from './jobs/reminderJob';
 
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'redis',
@@ -14,7 +15,7 @@ const redis = new Redis({
 
 redis.on('connect', async () => {
   console.log('worker ready');
-  await initScheduler(briefingJob, checkinJob, reviewJob, emailSummaryJob, weeklyReportJob);
+  await initScheduler(briefingJob, checkinJob, reviewJob, emailSummaryJob, weeklyReportJob, reminderJob);
 });
 
 redis.on('error', (err) => {

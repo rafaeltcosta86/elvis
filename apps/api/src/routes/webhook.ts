@@ -5,7 +5,7 @@ import { parseCommand } from '../lib/commandParser';
 import { sendWhatsApp } from '../lib/nanoclawClient';
 import prisma from '../lib/prisma';
 import { addDays, nextMonday, nextDay, format, parseISO, setHours, setMinutes } from 'date-fns';
-import { utcToZonedTime } from 'date-fns-tz';
+import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 import { getEmailSummary } from '../lib/emailService';
 import { getOrCreateProfile } from '../lib/userModel';
 import {
@@ -23,6 +23,7 @@ import {
   suggestAction,
   normalizeAudioCommand,
   generateIntroduction,
+  extractReminder,
 } from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
@@ -193,6 +194,49 @@ async function handleIncomingWhatsApp(
   sender_id: string,
   message_text: string
 ): Promise<string> {
+  const pendingId = await getPending(sender_id);
+  const trimmed = message_text.trim();
+
+  // If there's a pending confirmation (like SEND_TO or CREATE_EVENT),
+  // and the message is 1 or 2, it should be handled by standard parseCommand (CONFIRM/CANCEL)
+  // AC4: confirmation has precedence over snooze.
+  if (pendingId && (trimmed === '1' || trimmed === '2')) {
+    // Let it fall through to parseCommand and then the switch(intent)
+  } else {
+    // Check for pending snooze
+    const snoozeKey = `pending:snooze:${sender_id}`;
+    const snoozeData = await redis.get(snoozeKey);
+
+    if (snoozeData && ['1', '2', '3'].includes(trimmed)) {
+      const { reminderId, originalHour, originalMinute } = JSON.parse(snoozeData);
+      let newRemindAt: Date;
+      const now = new Date();
+
+      if (trimmed === '1') {
+        newRemindAt = new Date(now.getTime() + 60 * 60 * 1000);
+      } else if (trimmed === '2') {
+        newRemindAt = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+      } else {
+        // Option 3: next day same time BRT
+        const brtNow = utcToZonedTime(now, TIMEZONE);
+        let targetDate = addDays(brtNow, 1);
+        targetDate = setHours(targetDate, originalHour);
+        targetDate = setMinutes(targetDate, originalMinute);
+        newRemindAt = zonedTimeToUtc(targetDate, TIMEZONE);
+      }
+
+      await prisma.reminder.update({
+        where: { id: reminderId },
+        data: { remind_at: newRemindAt, status: 'SCHEDULED' },
+      });
+
+      await redis.del(snoozeKey);
+      const brtRescheduled = utcToZonedTime(newRemindAt, TIMEZONE);
+      return `✅ Lembrete reagendado para ${format(brtRescheduled, 'dd/MM/yyyy')} às ${format(brtRescheduled, 'HH:mm')} (BRT).`;
+    }
+  }
+
+
   const { intent, args } = parseCommand(message_text);
   let responseText = '';
 
@@ -511,14 +555,31 @@ async function handleIncomingWhatsApp(
           break;
         }
 
+        const taskTitle = args?.rawText || 'Sem título';
         const newTask = await prisma.task.create({
           data: {
-            title: args?.rawText || 'Sem título',
+            title: taskTitle,
             category: 'outros',
           },
         });
 
+        const reminder = await extractReminder(taskTitle, TIMEZONE);
+        if (reminder) {
+          await prisma.reminder.create({
+            data: {
+              task_id: newTask.id,
+              remind_at: new Date(reminder.remind_at),
+              channel: 'whatsapp',
+              status: 'SCHEDULED',
+            },
+          });
+        }
+
         responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+
+        if (!reminder) {
+          responseText += `\n\n⚠️ Não consegui identificar data/hora para o lembrete. A tarefa foi criada sem lembrete.`;
+        }
         break;
       }
 
