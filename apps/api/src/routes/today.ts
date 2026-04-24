@@ -13,6 +13,7 @@ import { type Task } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { PostPlanSchema, PostponeSchema } from '../schemas/today';
 import { getOrCreateProfile, updateInferredPrefs, type InferredPrefs } from '../lib/userModel';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
@@ -117,7 +118,7 @@ router.get('/today', async (_req, res) => {
       recommendations,
     });
   } catch (err) {
-    console.error('GET /today error:', err);
+    console.error('GET /today error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -142,7 +143,7 @@ router.post('/today/plan', async (req, res) => {
         details: err.errors,
       });
     }
-    console.error('POST /today/plan error:', err);
+    console.error('POST /today/plan error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -9,6 +9,7 @@ import {
   ListTasksQuerySchema,
 } from '../schemas/task';
 import { PostponeSchema } from '../schemas/today';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 
@@ -34,7 +35,7 @@ router.post('/tasks', async (req, res) => {
         details: err.errors,
       });
     }
-    console.error('POST /tasks error:', err);
+    console.error('POST /tasks error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -58,7 +59,7 @@ router.get('/tasks', async (req, res) => {
         details: err.errors,
       });
     }
-    console.error('GET /tasks error:', err);
+    console.error('GET /tasks error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -86,7 +87,7 @@ router.patch('/tasks/:id', async (req, res) => {
         details: err.errors,
       });
     }
-    console.error('PATCH /tasks/:id error:', err);
+    console.error('PATCH /tasks/:id error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -118,7 +119,7 @@ router.post('/tasks/:id/done', async (req, res) => {
 
     res.json(updated);
   } catch (err) {
-    console.error('POST /tasks/:id/done error:', err);
+    console.error('POST /tasks/:id/done error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -169,7 +170,7 @@ router.post('/tasks/:id/postpone', async (req, res) => {
         details: err.errors,
       });
     }
-    console.error('POST /tasks/:id/postpone error:', err);
+    console.error('POST /tasks/:id/postpone error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
