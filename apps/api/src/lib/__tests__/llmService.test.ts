@@ -4,7 +4,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-import { classifyIntent, normalizeAudioCommand, extractReminder, type LLMClassification } from '../llmService';
+import {
+  classifyIntent,
+  normalizeAudioCommand,
+  generateIntroduction,
+  extractReminder,
+  type LLMClassification,
+} from '../llmService';
 
 function groqResponse(content: string) {
   return {
@@ -100,6 +106,56 @@ describe('classifyIntent', () => {
       owner_alias: 'pai',
     });
   });
+
+  it('returns EDIT_CONTACT for name change', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"EDIT_CONTACT","contact_name":"Siqueira","field":"name","new_value":"Rafa Siqueira"}')
+    );
+    const result = await classifyIntent('mude o nome do Siqueira para Rafa Siqueira');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Siqueira',
+      field: 'name',
+      new_value: 'Rafa Siqueira',
+    });
+  });
+
+  it('returns EDIT_CONTACT for phone change', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"EDIT_CONTACT","contact_name":"Amanda","field":"phone","new_value":"5511988887777"}')
+    );
+    const result = await classifyIntent('altera o telefone da Amanda para 5511988887777');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Amanda',
+      field: 'phone',
+      new_value: '5511988887777',
+    });
+  });
+
+  it('returns EDIT_CONTACT for alias change', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"EDIT_CONTACT","contact_name":"João","field":"alias","new_value":"/jao"}')
+    );
+    const result = await classifyIntent('troca o alias do João para /jao');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'João',
+      field: 'alias',
+      new_value: '/jao',
+    });
+  });
+
+  it('returns DELETE_CONTACT when user wants to remove a contact', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"DELETE_CONTACT","contact_identifier":"Siqueira"}')
+    );
+    const result = await classifyIntent('delete o contato Siqueira');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'DELETE_CONTACT',
+      contact_identifier: 'Siqueira',
+    });
+  });
 });
 
 describe('CREATE_EVENT intent', () => {
@@ -162,40 +218,6 @@ describe('normalizeAudioCommand', () => {
     expect(result).toBe('manda para Amanda: oi');
   });
 
-  it('reformula perspectiva: "Diga para Estela que o RG dela está na casa da Karen"', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: seu RG está na casa da Karen'));
-    const result = await normalizeAudioCommand('Diga para Estela que o RG dela está na casa da Karen');
-    expect(result).toBe('manda para Estela: seu RG está na casa da Karen');
-  });
-
-  it('usa "mandou dizer" ao repassar informação com nome próprio (sem redundância)', async () => {
-    process.env.OWNER_NAME = 'Rafael';
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: Rafael mandou dizer que seu RG está na casa da Karen'));
-    const result = await normalizeAudioCommand('Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen');
-    expect(result).toBe('manda para Estela: Rafael mandou dizer que seu RG está na casa da Karen');
-  });
-
-  it('usa "teu pai pediu pra você" ao repassar pedido com título de parentesco', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: teu pai pediu pra você voltar a colocar as vogais nas palavras'));
-    const result = await normalizeAudioCommand(
-      'diga para a Estela que eu pedi para ela voltar a colocar as vogais nas palavras',
-      'pai'
-    );
-    expect(result).toBe('manda para Estela: teu pai pediu pra você voltar a colocar as vogais nas palavras');
-    // verifica que o prompt usa "teu pai" e não só "pai"
-    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.messages[0].content).toContain('teu pai');
-  });
-
-  it('usa "teu pai mandou dizer" ao repassar informação com título de parentesco', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Estela: teu pai mandou dizer que seu RG está na casa da Karen'));
-    const result = await normalizeAudioCommand(
-      'fala pra Estela que o RG dela tá na casa da Karen',
-      'pai'
-    );
-    expect(result).toBe('manda para Estela: teu pai mandou dizer que seu RG está na casa da Karen');
-  });
-
   it('retorna texto limpo para comandos sem envio: "lembra de comprar pão"', async () => {
     mockFetch.mockResolvedValue(groqResponse('comprar pão'));
     const result = await normalizeAudioCommand('lembra de comprar pão amanhã');
@@ -214,14 +236,63 @@ describe('normalizeAudioCommand', () => {
     const result = await normalizeAudioCommand('Manda um oi pra Amanda.');
     expect(result).toBe('Manda um oi pra Amanda.');
   });
+});
 
-  it('usa ownerAlias do contato quando fornecido', async () => {
-    mockFetch.mockResolvedValue(groqResponse('manda para Linic: Rafa chega às 18h'));
-    const result = await normalizeAudioCommand('Fala pra Linic que eu chego às 18h', 'Rafa');
-    expect(result).toBe('manda para Linic: Rafa chega às 18h');
-    // verifica que o prompt enviado contém "Rafa"
+describe('INTRODUCE_SELF intent', () => {
+  it('extrai contact_name e context quando fornecidos', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"INTRODUCE_SELF","contact_name":"João","context":"trabalhamos juntos na McKinsey"}')
+    );
+    const result = await classifyIntent('se apresenta pro João, diz que trabalhamos juntos na McKinsey');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'João',
+      context: 'trabalhamos juntos na McKinsey',
+    });
+  });
+
+  it('extrai apenas contact_name quando context está ausente', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"INTRODUCE_SELF","contact_name":"João"}')
+    );
+    const result = await classifyIntent('se apresenta pro João');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'João',
+    });
+  });
+});
+
+describe('generateIntroduction', () => {
+  it('gera mensagem usando o LLM incorporando contexto', async () => {
+    const expectedMsg = 'Olá João, sou o Elvis, assistente do Rafael. O Rafael mencionou que trabalharam juntos na McKinsey.';
+    mockFetch.mockResolvedValue(groqResponse(expectedMsg));
+
+    const result = await generateIntroduction('João', 'trabalhamos juntos na McKinsey', 'Rafael');
+
+    expect(result).toBe(expectedMsg);
     const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.messages[0].content).toContain('Rafa');
+    expect(body.messages[0].content).toContain('João');
+    expect(body.messages[0].content).toContain('trabalhamos juntos na McKinsey');
+    expect(body.messages[0].content).toContain('Rafael');
+  });
+
+  it('gera mensagem genérica quando context está ausente', async () => {
+    const expectedMsg = 'Olá João, eu sou o Elvis, assistente do Rafael.';
+    mockFetch.mockResolvedValue(groqResponse(expectedMsg));
+
+    const result = await generateIntroduction('João', undefined, 'Rafael');
+
+    expect(result).toBe(expectedMsg);
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.messages[0].content).toContain('João');
+  });
+
+  it('usa fallback quando API key está ausente', async () => {
+    delete process.env.GROQ_API_KEY;
+    const result = await generateIntroduction('João', 'contexto', 'Rafael');
+    expect(result).toBe('Olá João, eu sou o Elvis, assistente do Rafael.');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 

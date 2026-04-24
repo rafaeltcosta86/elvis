@@ -6,8 +6,8 @@ on:
 
 jobs:
   trigger-jules-on-spec-approved:
-    name: spec:approved → acionar Jules para implementação
-    if: github.event.label.name == 'spec:approved'
+    name: spec:aprovado → acionar Jules para implementação
+    if: github.event.label.name == 'spec:aprovado'
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -19,7 +19,7 @@ jobs:
           script: |
             const issueNumber = context.payload.issue.number;
 
-            // 1. Adicionar label jules para garantir o gatilho externo
+            // 1. Adicionar label jules para acionar o GitHub App do Jules
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -27,7 +27,23 @@ jobs:
               labels: ['jules'],
             });
 
-            // 2. Postar o comentário com as instruções detalhadas
+            // 2. Mover card para Desenvolvimento
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                name: 'stage:aprovacao',
+              });
+            } catch {}
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['stage:desenvolvimento'],
+            });
+
+            // 3. Postar o comentário com as instruções detalhadas
             const body = [
               '@google-labs-jules A spec desta issue foi aprovada. Por favor, implemente conforme descrito no body acima.',
               '',
@@ -37,8 +53,7 @@ jobs:
               '3. Ler `docs/architecture.md` — invariantes de ouro e Definition of Done',
               '',
               '**Sequência obrigatória de labels no board:**',
-              `- Ao iniciar o desenvolvimento: \`gh issue edit ${issueNumber} --repo ${context.repo.owner}/${context.repo.repo} --remove-label "pdlc:aprovacao" --add-label "pdlc:desenvolvimento"\``,
-              `- Ao finalizar o desenvolvimento e ANTES de rodar os testes: \`gh issue edit ${issueNumber} --repo ${context.repo.owner}/${context.repo.repo} --remove-label "pdlc:desenvolvimento" --add-label "pdlc:testes"\``,
+              `- Ao finalizar o desenvolvimento e ANTES de rodar os testes: \`gh issue edit ${issueNumber} --repo ${context.repo.owner}/${context.repo.repo} --remove-label "stage:desenvolvimento" --add-label "stage:testes"\``,
               '- Ao abrir o PR: o workflow move o card para Code Review automaticamente',
               '',
               '**Regras de implementação:**',
@@ -57,7 +72,6 @@ jobs:
 
   trigger-jules:
     name: Notificar Jules sobre violação de arquitetura
-    # Roda quando a issue tem (ou recém ganhou) o label architecture-violation
     if: contains(github.event.issue.labels.*.name, 'architecture-violation')
     runs-on: ubuntu-latest
     permissions:

@@ -4,6 +4,7 @@ import { getEmailSummary } from '../lib/emailService';
 import { sendEmail as outlookSendEmail } from '../lib/outlookMailClient';
 import { createGmailClient } from '../lib/gmailClient';
 import prisma from '../lib/prisma';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router.post('/email/summary', async (_req, res) => {
     if (message.includes('OAuth not configured')) {
       res.status(503).json({ error: message });
     } else {
-      console.error('POST /email/summary error:', err);
+      console.error('POST /email/summary error:', sanitizeError(err));
       res.status(502).json({ error: 'Failed to fetch emails from providers' });
     }
   }
@@ -76,7 +77,7 @@ router.post('/email/draft', async (req, res) => {
       preview: { to, subject, body },
     });
   } catch (err) {
-    console.error('POST /email/draft error:', err);
+    console.error('POST /email/draft error:', sanitizeError(err));
     res.status(500).json({ error: 'Failed to create draft' });
   }
 });
@@ -161,7 +162,7 @@ router.post('/email/send', async (req, res) => {
 
     res.json({ status: 'sent', communication_id: comm.id });
   } catch (err) {
-    console.error('POST /email/send error:', err);
+    console.error('POST /email/send error:', sanitizeError(err));
     res.status(502).json({ error: 'Failed to send email' });
   }
 });

@@ -274,13 +274,13 @@ bash scripts/backup.sh && ls backups/  # → arquivo .dump de hoje
 
 > **Contexto:** Em 2026-04-09, a hipótese central do MVP foi validada: o comando `SEND_TO` existe e funciona (ex: "manda para assistente: já terminei a reunião"). No entanto, o `ai-blueprints.md` exige `approval_record_id` antes de qualquer escrita externa, e o WhatsApp envia imediatamente sem approval gate — violando a Invariante #1. M10 corrige essa lacuna trazendo WhatsApp para paridade com o fluxo de e-mail.
 
-- [ ] Quando `SEND_TO` é acionado, criar registro `Communication` (status: `AWAITING_APPROVAL`, channel: `WHATSAPP`)
-- [ ] Responder ao owner with preview: _"Vou mandar para [nome]: '[msg]'. Confirma? /confirm [id] ou /cancel [id]"_
-- [ ] Implementar intent `CONFIRM` no commandParser (ex: "/confirm 42")
-- [ ] Implementar intent `CANCEL` no commandParser (ex: "/cancel 42")
-- [ ] Só enviar a mensagem real após `/confirm` — verificar `approval_record_id` no banco
-- [ ] Atualizar `Communication.status` → `SENT` ou `CANCELLED` + entrada no `audit_log`
-- [ ] Testes: tentativa de envio sem confirmação, confirmação, cancelamento, id inválido
+- [x] Quando `SEND_TO` é acionado, criar registro `Communication` (status: `AWAITING_APPROVAL`, channel: `WHATSAPP`)
+- [x] Responder ao owner with preview: _"Vou mandar para [nome]: '[msg]'. Confirma? /confirm [id] ou /cancel [id]"_
+- [x] Implementar intent `CONFIRM` no commandParser (ex: "/confirm 42")
+- [x] Implementar intent `CANCEL` no commandParser (ex: "/cancel 42")
+- [x] Só enviar a mensagem real após `/confirm` — verificar `approval_record_id` no banco
+- [x] Atualizar `Communication.status` → `SENT` ou `CANCELLED` + entrada no `audit_log`
+- [x] Testes: tentativa de envio sem confirmação, confirmação, cancelamento, id inválido
 
 **Critérios de aceite:**
 ```bash
@@ -344,10 +344,11 @@ curl -X POST /webhook/nanoclaw -d '{"message":"/li oi"}'
 
 > Custo estimado: $0 no free tier do Groq (Whisper Large v3) para até 100 msg/dia com 50% voz.
 
-- [ ] Receber payload de áudio OGG do webhook NanoClaw/Baileys
-- [ ] Transcrever via Groq Whisper (`whisper-large-v3`, free tier)
-- [ ] Passar transcrição ao `handleIncomingWhatsApp` como texto normal
-- [ ] Testar com mensagens de voz reais no WhatsApp
+- [x] Receber payload de áudio OGG do webhook NanoClaw/Baileys
+- [x] Transcrever via Groq Whisper (`whisper-large-v3`, free tier)
+- [x] Corrigir transcrição de nomes próprios via parâmetro `prompt` (ex: "Claude Code", "Anthropic")
+- [x] Passar transcrição ao `handleIncomingWhatsApp` como texto normal
+- [x] Testar com mensagens de voz reais no WhatsApp
 
 ---
 
@@ -439,4 +440,8 @@ pnpm lint && pnpm build
 | 2026-04-17 | Comandos [COWORK] concluído: Adicionado comando `/contatos` para listagem de contatos cadastrados — **235 testes passando** ✅ |
 | 2026-04-17 | Performance: Moved dayMap instantiation outside resolveDate in webhook.ts to reduce GC pressure. |
 | 2026-04-17 | Sentinel [COWORK] concluído: Automação de issues architecture-violation para o board PDLC (coluna 💡 Ideia) usando PROJECT_TOKEN. |
+| 2026-04-17 | Comandos [COWORK] concluído: Edição de contatos via linguagem natural (EDIT_CONTACT) integrada ao webhook — **243 testes passando** ✅ |
+| 2026-04-24 | Testing [COWORK] concluído: Adicionados testes unitários para MockAdapter em packages/shared. |
+| 2026-04-25 | Feat [COWORK] concluído: Elvis se apresenta para um contato (INTRODUCE_SELF) com contexto opcional e geração via LLM — **306 testes passando** ✅ |
+| 2026-04-25 | Fix [COWORK] concluído: Adicionado parâmetro `prompt` no Whisper para melhorar transcrição de nomes próprios. |
 | 2026-05-20 | Reminders [COWORK] concluído: Extração automática de lembretes via LLM na criação de tarefas, disparo via worker job e suporte a snooze no WhatsApp. |

@@ -20,11 +20,19 @@ export async function computeWeeklyStats(): Promise<WeeklyStats> {
     },
   });
 
-  return {
-    done: events.filter((e) => e.action === 'task.done').length,
-    postponed: events.filter((e) => e.action === 'task.postponed').length,
-    created: events.filter((e) => e.action === 'task.created').length,
-  };
+  const stats: WeeklyStats = { done: 0, postponed: 0, created: 0 };
+
+  for (const event of events) {
+    if (event.action === 'task.done') {
+      stats.done++;
+    } else if (event.action === 'task.postponed') {
+      stats.postponed++;
+    } else if (event.action === 'task.created') {
+      stats.created++;
+    }
+  }
+
+  return stats;
 }
 
 export function formatWeeklyReport(

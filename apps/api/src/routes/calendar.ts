@@ -14,6 +14,7 @@ import {
 import { utcToZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { getToken } from '../lib/oauthService';
 import { graphGet, graphPost } from '../lib/graphClient';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
@@ -82,7 +83,7 @@ router.get('/calendar/today', async (_req, res) => {
       events,
     });
   } catch (err) {
-    console.error('GET /calendar/today error:', err);
+    console.error('GET /calendar/today error:', sanitizeError(err));
     res.status(502).json({ error: 'Failed to fetch calendar events' });
   }
 });
@@ -129,7 +130,7 @@ router.get('/calendar/week', async (_req, res) => {
       next_week,
     });
   } catch (err) {
-    console.error('GET /calendar/week error:', err);
+    console.error('GET /calendar/week error:', sanitizeError(err));
     res.status(502).json({ error: 'Failed to fetch calendar events' });
   }
 });
@@ -202,7 +203,7 @@ router.post('/calendar/events', async (req, res) => {
       conflicts,
     });
   } catch (err) {
-    console.error('POST /calendar/events error:', err);
+    console.error('POST /calendar/events error:', sanitizeError(err));
     res.status(502).json({ error: 'Failed to create calendar event' });
   }
 });

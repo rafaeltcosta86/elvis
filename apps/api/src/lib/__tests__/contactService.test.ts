@@ -8,6 +8,7 @@ vi.mock('../prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
       findMany: vi.fn(),
+      delete: vi.fn(),
     },
   },
 }));
@@ -20,6 +21,8 @@ import {
   createContact,
   setOwnerAlias,
   listContacts,
+  updateContact,
+  deleteContact,
 } from '../contactService';
 
 const linic = {
@@ -134,5 +137,65 @@ describe('listContacts', () => {
     (prisma.contact.findMany as any).mockResolvedValue([linic]);
     const result = await listContacts();
     expect(result).toEqual([linic]);
+  });
+});
+
+describe('updateContact', () => {
+  it('updates contact name', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(linic);
+    const updated = { ...linic, name: 'Rafa Siqueira' };
+    (prisma.contact.update as any).mockResolvedValue(updated);
+
+    const result = await updateContact('Linic', 'name', 'Rafa Siqueira');
+
+    expect(prisma.contact.update).toHaveBeenCalledWith({
+      where: { id: linic.id },
+      data: { name: 'Rafa Siqueira' },
+    });
+    expect(result.name).toBe('Rafa Siqueira');
+  });
+
+  it('updates contact phone', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(linic);
+    const updated = { ...linic, phone: '5511999998888' };
+    (prisma.contact.update as any).mockResolvedValue(updated);
+
+    const result = await updateContact('Linic', 'phone', '5511999998888');
+
+    expect(prisma.contact.update).toHaveBeenCalledWith({
+      where: { id: linic.id },
+      data: { phone: '5511999998888' },
+    });
+    expect(result.phone).toBe('5511999998888');
+  });
+
+  it('updates contact alias (replaces the first one)', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(linic);
+    const updated = { ...linic, aliases: ['/li', 'linic'] };
+    (prisma.contact.update as any).mockResolvedValue(updated);
+
+    const result = await updateContact('Linic', 'alias', '/li');
+
+    expect(prisma.contact.update).toHaveBeenCalledWith({
+      where: { id: linic.id },
+      data: { aliases: ['/li', 'linic'] },
+    });
+    expect(result.aliases[0]).toBe('/li');
+  });
+
+  it('throws if contact not found', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(null);
+    await expect(updateContact('Unknown', 'name', 'New Name')).rejects.toThrow('not found');
+  });
+});
+
+describe('deleteContact', () => {
+  it('deletes contact by id', async () => {
+    (prisma.contact.delete as any).mockResolvedValue(linic);
+    const result = await deleteContact('c1');
+    expect(prisma.contact.delete).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+    });
+    expect(result).toEqual(linic);
   });
 });

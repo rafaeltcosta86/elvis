@@ -24,6 +24,10 @@ vi.mock('../../lib/prisma', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    reminder: {
+      create: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -40,11 +44,14 @@ vi.mock('../../lib/contactService', () => ({
   findByName: vi.fn().mockResolvedValue(null),
   addAlias: vi.fn(),
   listContacts: vi.fn(),
+  updateContact: vi.fn(),
+  deleteContact: vi.fn(),
 }));
 
 vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
+  generateIntroduction: vi.fn(),
   extractReminder: vi.fn(),
 }));
 
@@ -61,9 +68,15 @@ import { getEmailSummary } from '../../lib/emailService';
 import { getToken } from '../../lib/oauthService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
-import { findByAlias, findByName, addAlias, listContacts } from '../../lib/contactService';
+import {
+  findByAlias,
+  findByName,
+  addAlias,
+  listContacts,
+  updateContact,
+} from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
-import { classifyIntent } from '../../lib/llmService';
+import { classifyIntent, generateIntroduction } from '../../lib/llmService';
 
 const app = express();
 app.use(express.json());
@@ -260,6 +273,38 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('não encontrado');
+  });
+
+  it('updates contact when LLM detects EDIT_CONTACT intent', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Siqueira',
+      field: 'name',
+      new_value: 'Rafa Siqueira',
+    });
+    (updateContact as any).mockResolvedValue({ name: 'Rafa Siqueira' });
+
+    await webhookPost('mude o nome do Siqueira para Rafa Siqueira');
+
+    expect(classifyIntent).toHaveBeenCalledWith('mude o nome do Siqueira para Rafa Siqueira');
+    expect(updateContact).toHaveBeenCalledWith('Siqueira', 'name', 'Rafa Siqueira');
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Contato atualizado: Rafa Siqueira');
+  });
+
+  it('replies with error when contact not found during EDIT_CONTACT', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'EDIT_CONTACT',
+      contact_name: 'Desconhecido',
+      field: 'name',
+      new_value: 'Novo Nome',
+    });
+    (updateContact as any).mockRejectedValue(new Error('Contact "Desconhecido" not found'));
+
+    await webhookPost('mude o nome do Desconhecido para Novo Nome');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Não encontrei nenhum contato');
   });
 
   it('creates task when LLM returns UNKNOWN', async () => {
@@ -519,5 +564,58 @@ describe('Webhook — CREATE_EVENT', () => {
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('❌');
+  });
+});
+
+describe('Webhook — INTRODUCE_SELF', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.communication.create as any).mockResolvedValue({ id: 'comm-intro-001' });
+    (prisma.auditLog.create as any).mockResolvedValue({});
+  });
+
+  it('retorna erro quando o contato não é encontrado', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'Inexistente',
+    });
+    (findByName as any).mockResolvedValue(null);
+    (findByAlias as any).mockResolvedValue(null);
+
+    await webhookPost('se apresenta pro Inexistente');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('❌ Contato "Inexistente" não encontrado');
+  });
+
+  it('cria draft e retorna preview ternário quando contato existe', async () => {
+    const contact = { id: 'c1', name: 'João', phone: '5511988887777', owner_alias: 'Rafael', aliases: [] };
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'João',
+      context: 'McKinsey',
+    });
+    (findByName as any).mockResolvedValue(contact);
+    (generateIntroduction as any).mockResolvedValue('Olá João, sou o Elvis assistente do Rafael da McKinsey.');
+
+    await webhookPost('se apresenta pro João, diz que somos da McKinsey');
+
+    expect(generateIntroduction).toHaveBeenCalledWith('João', 'McKinsey', 'Rafael');
+    expect(prisma.communication.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          to: '5511988887777',
+          body: 'Olá João, sou o Elvis assistente do Rafael da McKinsey.',
+          status: 'AWAITING_APPROVAL',
+        }),
+      })
+    );
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Apresentação para João');
+    expect(sentText).toContain('Olá João, sou o Elvis assistente do Rafael da McKinsey.');
+    expect(sentText).toContain('1️⃣ Confirmar');
   });
 });

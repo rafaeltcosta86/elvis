@@ -40,3 +40,37 @@ export async function setOwnerAlias(contactName: string, alias: string): Promise
 export async function listContacts(): Promise<Contact[]> {
   return prisma.contact.findMany();
 }
+
+export async function updateContact(
+  contactName: string,
+  field: 'name' | 'alias' | 'phone',
+  newValue: string,
+): Promise<Contact> {
+  const contact = (await findByName(contactName)) || (await findByAlias(contactName));
+  if (!contact) throw new Error(`Contact "${contactName}" not found`);
+
+  const data: { name?: string; phone?: string; aliases?: string[] } = {};
+  if (field === 'name') {
+    data.name = newValue;
+  } else if (field === 'phone') {
+    data.phone = newValue;
+  } else if (field === 'alias') {
+    // Replace or set the first alias
+    const aliases = [...contact.aliases];
+    if (aliases.length > 0) {
+      aliases[0] = newValue;
+    } else {
+      aliases.push(newValue);
+    }
+    data.aliases = aliases;
+  }
+
+  return prisma.contact.update({
+    where: { id: contact.id },
+    data,
+  });
+}
+
+export async function deleteContact(id: string): Promise<Contact> {
+  return prisma.contact.delete({ where: { id } });
+}
