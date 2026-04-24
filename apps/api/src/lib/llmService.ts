@@ -24,10 +24,13 @@ COLABORAÇÃO:
 
 Analise a mensagem e retorne JSON com UMA destas estruturas:
 
-- Enviar mensagem para um contato: {"intent":"SEND_MESSAGE","contact_name":"<nome>","message":"<mensagem exata do usuário>"}
+- Enviar mensagem para um contato: {"intent":"SEND_MESSAGE","contact_name":"<nome>","message":"<mensagem adaptada>"}
   Use quando o usuário quiser mandar uma mensagem, falar algo, avisar ou perguntar algo a alguém.
-  IMPORTANTE: Extraia a mensagem FIELMENTE ao que o usuário disse, preservando o tom (pergunta, afirmação, etc.).
-  Ex: "manda uma mensagem para o Guilherme perguntando se ele já instalou o Claude Code" -> {"intent":"SEND_MESSAGE","contact_name":"Guilherme","message":"perguntando se ele já instalou o Claude Code"}
+  PERSPECTIVA: Elvis envia do próprio número, não do número do Rafael. Adapte a mensagem para a perspectiva do Elvis:
+  - Declarações em primeira pessoa do Rafael → terceira pessoa: "eu chego às 18h" → "o Rafael chega às 18h" | "eu chamei ele de gordão" → "o Rafael te chamou de gordão"
+  - Mensagens neutras (saudações, perguntas, afirmações sem sujeito) → manter como estão: "oi, tudo bem?" → "oi, tudo bem?"
+  Ex: "manda uma mensagem para o Guilherme perguntando se ele já instalou o Claude Code" -> {"intent":"SEND_MESSAGE","contact_name":"Guilherme","message":"o Rafael quer saber se você já instalou o Claude Code"}
+  Ex: "manda um oi pra Amanda" -> {"intent":"SEND_MESSAGE","contact_name":"Amanda","message":"oi"}
 
 - Criação de NOVO contato com número de telefone: {"intent":"CREATE_CONTACT","contact_name":"<nome>","phone":"<somente dígitos, ex: 5511999990000>","owner_alias":"<opcional: como o dono quer ser chamado por este contato>"}
   Use quando a mensagem contiver um número de telefone E o usuário quiser cadastrar/criar/adicionar um contato.
@@ -124,12 +127,14 @@ PRIORIDADE 1 — Se o dono pede para ELVIS se apresentar a alguém: responda APE
     "Elvis, se introduz para a Ana" → "Elvis, se introduz para a Ana"
 
 PRIORIDADE 2 — Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
-  IMPORTANTE: Extraia a mensagem FIELMENTE ao que o usuário disse.
-  NÃO adicione framing como "${ownerName} mandou dizer" ou "${ownerName} pediu".
+  PERSPECTIVA: Elvis envia do próprio número. Adapte declarações em primeira pessoa do Rafael para terceira pessoa.
+  Declarações do Rafael → terceira pessoa: "eu chego às 18h" → "o ${ownerName} chega às 18h" | "eu chamei ele de gordão" → "o ${ownerName} te chamou de gordão"
+  Mensagens neutras (saudações, perguntas) → manter como estão: "oi" → "oi"
   Exemplos:
     "Manda um oi pra Amanda" → "manda para Amanda: oi"
     "Diga para Estela que o RG dela está na casa da Karen" → "manda para Estela: seu RG está na casa da Karen"
-    "Fala pra João que eu chego às 18h" → "manda para João: eu chego às 18h"
+    "Fala pra João que eu chego às 18h" → "manda para João: o ${ownerName} chega às 18h"
+    "manda pro Cheida dizendo que eu chamei ele de gordão" → "manda para Cheida: o ${ownerName} te chamou de gordão"
 
 PRIORIDADE 3 — Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
   "Lembra de comprar pão amanhã" → "comprar pão amanhã"
