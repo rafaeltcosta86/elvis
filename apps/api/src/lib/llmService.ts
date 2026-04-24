@@ -5,6 +5,7 @@ export type LLMClassification =
   | { intent: 'EDIT_CONTACT'; contact_name: string; field: 'name' | 'alias' | 'phone'; new_value: string }
   | { intent: 'DELETE_CONTACT'; contact_identifier: string }
   | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
+  | { intent: 'INTRODUCE_SELF'; contact_name: string; context?: string }
   | { intent: 'UNKNOWN' };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -37,6 +38,11 @@ Analise a mensagem e retorne JSON com UMA destas estruturas:
   Use quando o usuário quiser agendar, marcar, criar uma reunião, evento, compromisso ou lembrança com hora.
   Ex: "marca uma reunião com a Linic quinta às 15h" → {"intent":"CREATE_EVENT","title":"Reunião com Linic","date":"quinta","time":"15:00","duration_min":60,"contact_name":"Linic"}
   Ex: "agenda call com o João amanhã às 10h, 30 minutos" → {"intent":"CREATE_EVENT","title":"Call com João","date":"amanhã","time":"10:00","duration_min":30,"contact_name":"João"}
+
+- Apresentação de Elvis para um contato: {"intent":"INTRODUCE_SELF","contact_name":"<nome>","context":"<opcional: contexto da relação mencionado>"}
+  Use quando o usuário pedir para o Elvis se apresentar a alguém, informar quem ele é ou iniciar contato.
+  Ex: "se apresenta pro João, diz que trabalhamos juntos na McKinsey" → {"intent":"INTRODUCE_SELF","contact_name":"João","context":"trabalhamos juntos na McKinsey"}
+  Ex: "se apresenta pro João" → {"intent":"INTRODUCE_SELF","contact_name":"João"}
 
 - Qualquer outra coisa: {"intent":"UNKNOWN"}
 
@@ -213,8 +219,60 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
     if (parsed.intent === 'DELETE_CONTACT' && parsed.contact_identifier) {
       return { intent: 'DELETE_CONTACT', contact_identifier: String(parsed.contact_identifier) };
     }
+    if (parsed.intent === 'INTRODUCE_SELF' && parsed.contact_name) {
+      return {
+        intent: 'INTRODUCE_SELF',
+        contact_name: String(parsed.contact_name),
+        ...(parsed.context ? { context: String(parsed.context) } : {}),
+      };
+    }
     return { intent: 'UNKNOWN' };
   } catch {
     return { intent: 'UNKNOWN' };
+  }
+}
+
+export async function generateIntroduction(
+  contactName: string,
+  context?: string,
+  ownerAlias?: string
+): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return `Olá ${contactName}, eu sou o Elvis, assistente do ${ownerAlias ?? 'Rafael'}.`;
+
+  const ownerName = ownerAlias ?? process.env.OWNER_NAME ?? 'Rafael';
+  const systemPrompt = `Você é o Elvis, um assistente pessoal inteligente e natural do ${ownerName}.
+Sua tarefa é escrever uma mensagem de apresentação para um novo contato chamado ${contactName}.
+${context ? `O contexto da relação é: ${context}.` : ''}
+
+Diretrizes:
+- Seja educado, profissional mas com um toque de naturalidade.
+- Identifique-se como Elvis, assistente do ${ownerName}.
+- Se houver contexto, incorpore-o naturalmente na mensagem para que o contato saiba de quem você está falando.
+- A mensagem deve ser curta e objetiva, adequada para WhatsApp.
+- NÃO use emojis em excesso.
+- NÃO use placeholders.
+
+Escreva apenas o texto da mensagem.`;
+
+  try {
+    const res = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'system', content: systemPrompt }],
+        temperature: 0.7,
+        max_tokens: 200,
+      }),
+    });
+
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    return (data?.choices?.[0]?.message?.content ?? '').trim();
+  } catch {
+    return `Olá ${contactName}, eu sou o Elvis, assistente do ${ownerName}.`;
   }
 }

@@ -18,7 +18,7 @@ import {
   listContacts,
   deleteContact,
 } from '../lib/contactService';
-import { classifyIntent, suggestAction, normalizeAudioCommand } from '../lib/llmService';
+import { classifyIntent, suggestAction, normalizeAudioCommand, generateIntroduction } from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
@@ -436,6 +436,32 @@ async function handleIncomingWhatsApp(
           });
           await savePending(sender_id, comm.id);
           responseText = deleteContactPreview(contact.name, formattedAlias, contact.phone);
+          break;
+        }
+
+        if (classification.intent === 'INTRODUCE_SELF') {
+          const contact = (await findByName(classification.contact_name)) || (await findByAlias(classification.contact_name));
+
+          if (!contact) {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado.`;
+            break;
+          }
+
+          const ownerAlias = contact.owner_alias || process.env.OWNER_NAME || 'Rafael';
+          const generatedMessage = await generateIntroduction(contact.name, classification.context, ownerAlias);
+
+          const comm = await prisma.communication.create({
+            data: {
+              provider: 'WHATSAPP',
+              type: 'DRAFT',
+              to: contact.phone,
+              body: generatedMessage,
+              status: 'AWAITING_APPROVAL',
+              metadata: { contactName: contact.name },
+            },
+          });
+          await savePending(sender_id, comm.id);
+          responseText = `Entendi: Apresentação para ${contact.name}\n\n${draftPreview(contact.name, generatedMessage)}`;
           break;
         }
 

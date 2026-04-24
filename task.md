@@ -441,3 +441,4 @@ pnpm lint && pnpm build
 | 2026-04-17 | Sentinel [COWORK] concluído: Automação de issues architecture-violation para o board PDLC (coluna 💡 Ideia) usando PROJECT_TOKEN. |
 | 2026-04-17 | Comandos [COWORK] concluído: Edição de contatos via linguagem natural (EDIT_CONTACT) integrada ao webhook — **243 testes passando** ✅ |
 | 2026-04-24 | Testing [COWORK] concluído: Adicionados testes unitários para MockAdapter em packages/shared. |
+| 2026-04-25 | Feat [COWORK] concluído: Elvis se apresenta para um contato (INTRODUCE_SELF) com contexto opcional e geração via LLM — **306 testes passando** ✅ |
