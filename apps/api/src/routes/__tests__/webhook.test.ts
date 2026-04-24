@@ -47,7 +47,6 @@ vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
   generateIntroduction: vi.fn(),
-  substitutePronouns: vi.fn((t) => t),
 }));
 
 vi.mock('../../lib/oauthService', () => ({
@@ -71,7 +70,7 @@ import {
   updateContact,
 } from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
-import { classifyIntent, generateIntroduction, substitutePronouns } from '../../lib/llmService';
+import { classifyIntent, generateIntroduction } from '../../lib/llmService';
 
 const app = express();
 app.use(express.json());

@@ -232,33 +232,6 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
   }
 }
 
-export function substitutePronouns(text: string): string {
-  const mapping: Record<string, string> = {
-    'eu': 'você',
-    'meu': 'seu',
-    'me': 'te',
-    'minha': 'sua',
-    'meus': 'seus',
-    'minhas': 'suas',
-    'mim': 'você',
-  };
-
-  let result = text;
-  for (const [from, to] of Object.entries(mapping)) {
-    // Word boundary regex to avoid partial matches (e.g., 'me' in 'amém')
-    // Supporting case-insensitive matching but simple substitution
-    const regex = new RegExp(`\\b${from}\\b`, 'gi');
-    result = result.replace(regex, (match) => {
-      // Basic case preservation: if original was capitalized, capitalize replacement
-      if (match[0] === match[0].toUpperCase()) {
-        return to.charAt(0).toUpperCase() + to.slice(1);
-      }
-      return to;
-    });
-  }
-
-  return result;
-}
 
 export async function generateIntroduction(
   contactName: string,

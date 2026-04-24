@@ -23,7 +23,6 @@ import {
   suggestAction,
   normalizeAudioCommand,
   generateIntroduction,
-  substitutePronouns,
 } from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
@@ -132,14 +131,12 @@ async function processSendMessage(
     return `❌ "${contactIdentifier}" não encontrado. Cadastre com /criar-contato ou adicione em WHATSAPP_CONTACTS=nome:numero`;
   }
 
-  const finalBody = substitutePronouns(rawMessage);
-
   const comm = await prisma.communication.create({
     data: {
       provider: 'WHATSAPP',
       type: 'DRAFT',
       to: contact.phone,
-      body: finalBody,
+      body: rawMessage,
       status: 'AWAITING_APPROVAL',
       metadata: { contactName: contact.name },
     },
@@ -156,7 +153,7 @@ async function processSendMessage(
   });
 
   await savePending(senderId, comm.id);
-  return draftPreview(contact.name, finalBody);
+  return draftPreview(contact.name, rawMessage);
 }
 
 // Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
