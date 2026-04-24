@@ -1,6 +1,6 @@
 name: Auto-approve PR
 
-# Dispara quando a label pr:approved é adicionada a um PR
+# Dispara quando a label stage:aprovado é adicionada a um PR
 # Pré-requisito: Settings → Actions → General → "Allow GitHub Actions reviews to count towards required approval"
 on:
   pull_request_target:
@@ -8,8 +8,8 @@ on:
 
 jobs:
   approve:
-    name: Aprovar PR via bot quando pr:approved adicionado
-    if: github.event.label.name == 'pr:approved'
+    name: Aprovar PR via bot quando stage:aprovado adicionado
+    if: github.event.label.name == 'stage:aprovado'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -24,6 +24,6 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
               event: 'APPROVE',
-              body: 'Aprovado via label pr:approved pelo revisor.',
+              body: 'Aprovado via label stage:aprovado pelo revisor.',
             });
             console.log(`PR #${context.payload.pull_request.number} aprovado.`);
