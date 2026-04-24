@@ -74,7 +74,7 @@ describe('transcribeAudio', () => {
     (mockedAxios.post as any).mockResolvedValueOnce({ data: { text: 'ok' } });
     await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
 
-    const formData = mockedAxios.post.mock.calls[0][1] as any;
+    const formData = (mockedAxios.post as any).mock.calls[0][1] as any;
     // FormData do pacote 'form-data' usa internal _streams
     const promptPart = formData._streams.find((s: any) => typeof s === 'string' && s.includes('name="prompt"'));
     expect(promptPart).toBeDefined();
@@ -88,7 +88,7 @@ describe('transcribeAudio', () => {
     (mockedAxios.post as any).mockResolvedValueOnce({ data: { text: 'ok' } });
     await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
 
-    const formData = mockedAxios.post.mock.calls[0][1] as any;
+    const formData = (mockedAxios.post as any).mock.calls[0][1] as any;
     const promptValue = formData._streams[formData._streams.findIndex((s: any) => typeof s === 'string' && s.includes('name="prompt"')) + 1];
     expect(promptValue).toBe('Custom Prompt, Test');
 
