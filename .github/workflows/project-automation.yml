@@ -25,7 +25,7 @@ env:
 jobs:
   move-violation-to-board:
     name: Violação detectada → 💡 Ideia
-    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'architecture-violation'
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'stage:architecture-violation'
     runs-on: ubuntu-latest
     steps:
       - name: Adicionar issue ao board na coluna Ideia
@@ -55,9 +55,9 @@ jobs:
 
             console.log(`Issue #${context.payload.issue.number} movida para 💡 Ideia`);
 
-  move-card-on-pdlc-label:
-    name: Label pdlc:* → mover card upstream
-    if: github.event_name == 'issues' && startsWith(github.event.label.name, 'pdlc:')
+  move-card-on-stage-label:
+    name: Label stage:* → mover card
+    if: github.event_name == 'issues' && startsWith(github.event.label.name, 'stage:')
     runs-on: ubuntu-latest
     steps:
       - name: Mapear label para coluna e mover card
@@ -67,12 +67,12 @@ jobs:
           script: |
             const label = context.payload.label.name;
             const statusMap = {
-              'pdlc:exploracao':      process.env.STATUS_EXPLORACAO,
-              'pdlc:brainstorming':   process.env.STATUS_BRAINSTORMING,
-              'pdlc:detalhando':      process.env.STATUS_DETALHANDO,
-              'pdlc:aprovacao':       process.env.STATUS_APROVACAO,
-              'pdlc:desenvolvimento': process.env.STATUS_DESENVOLVIMENTO,
-              'pdlc:testes':          process.env.STATUS_TESTES,
+              'stage:exploracao':      process.env.STATUS_EXPLORACAO,
+              'stage:brainstorming':   process.env.STATUS_BRAINSTORMING,
+              'stage:detalhando':      process.env.STATUS_DETALHANDO,
+              'stage:aprovacao':       process.env.STATUS_APROVACAO,
+              'stage:desenvolvimento': process.env.STATUS_DESENVOLVIMENTO,
+              'stage:testes':          process.env.STATUS_TESTES,
             };
             const optionId = statusMap[label];
             if (!optionId) { console.log(`Label ${label} sem mapeamento.`); return; }
@@ -157,10 +157,10 @@ jobs:
               console.log(`PR #${prNumber} adicionado ao board em Code Review`);
             }
 
-            // Adicionar label pr:revisao
+            // Adicionar label stage:revisao
             await github.rest.issues.addLabels({
               owner: repoOwner, repo: repoName, issue_number: prNumber,
-              labels: ['pr:revisao']
+              labels: ['stage:revisao']
             }).catch(() => {});
 
   move-card-on-review-approved:
@@ -224,11 +224,11 @@ jobs:
             // Atualizar labels
             try {
               await github.rest.issues.removeLabel({
-                owner: repoOwner, repo: repoName, issue_number: prNumber, name: 'pr:revisao'
+                owner: repoOwner, repo: repoName, issue_number: prNumber, name: 'stage:revisao'
               });
             } catch {}
             await github.rest.issues.addLabels({
-              owner: repoOwner, repo: repoName, issue_number: prNumber, labels: ['pr:approved']
+              owner: repoOwner, repo: repoName, issue_number: prNumber, labels: ['stage:aprovado']
             }).catch(() => {});
 
   move-card-on-pr-merge:
