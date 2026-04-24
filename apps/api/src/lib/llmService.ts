@@ -265,20 +265,22 @@ export async function generateIntroduction(
   if (!apiKey) return `Olá ${contactName}, eu sou o Elvis, assistente do ${ownerAlias ?? 'Rafael'}.`;
 
   const ownerName = ownerAlias ?? process.env.OWNER_NAME ?? 'Rafael';
-  const systemPrompt = `Você é o Elvis, um assistente pessoal inteligente e natural do ${ownerName}.
-Sua tarefa é escrever uma mensagem de apresentação para um novo contato chamado ${contactName}.
-${context ? `O contexto da relação é: ${context}.` : ''}
+  const systemPrompt = `Você é o Elvis, um assistente de IA pessoal do ${ownerName}.
+Escreva uma mensagem curta de apresentação para ${contactName} no WhatsApp.
+${context ? `Contexto da relação: ${context}.` : ''}
 
-Diretrizes:
-- Seja educado, profissional mas com um toque de naturalidade.
-- Identifique-se como Elvis, assistente do ${ownerName}.
-- Se houver contexto, incorpore-o naturalmente na mensagem para que o contato saiba de quem você está falando.
-- A mensagem deve ser curta e objetiva, adequada para WhatsApp.
-- NÃO use emojis em excesso.
+Tom: direto e descontraído, como uma mensagem de WhatsApp — não um e-mail corporativo.
+Exemplos de estilo:
+  Sem contexto: "Oi ${contactName}, sou o Elvis, assistente de IA do ${ownerName}. Ele pediu que eu me apresentasse."
+  Com contexto (ex: trabalharam juntos): "Oi ${contactName}, sou o Elvis, assistente de IA do ${ownerName} — vocês se conhecem da McKinsey. Ele queria que eu entrasse em contato."
+
+Regras:
+- Deixe claro que é um assistente de IA — não esconda isso.
+- Se houver contexto, use-o para personalizar.
+- Mensagem curta — 2 a 3 frases no máximo.
+- Sem emojis.
+- NÃO ofereça ajuda ao contato — Elvis trabalha para ${ownerName}, não para terceiros.
 - NÃO use placeholders.
-- NÃO ofereça serviços, ajuda ou disponibilidade ao contato — Elvis trabalha para ${ownerName}, não para terceiros.
-- NÃO use frases como "Como posso ajudar você?", "estou disponível", "pode contar comigo" ou similares.
-- A mensagem é apenas apresentação: Elvis existe, é assistente de ${ownerName}, e está iniciando contato.
 
 Escreva apenas o texto da mensagem.`;
 
