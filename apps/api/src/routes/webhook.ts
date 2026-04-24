@@ -18,7 +18,12 @@ import {
   listContacts,
   deleteContact,
 } from '../lib/contactService';
-import { classifyIntent, suggestAction, normalizeAudioCommand, generateIntroduction } from '../lib/llmService';
+import {
+  classifyIntent,
+  suggestAction,
+  normalizeAudioCommand,
+  generateIntroduction,
+} from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
@@ -101,6 +106,54 @@ function eventPreview(title: string, startISO: string, durationMin: number): str
 
 function deleteContactPreview(name: string, alias: string, phone: string): string {
   return `🗑️ Confirmar deleção?\n\nNome: ${name}\nAlias: ${alias}\nTelefone: ${phone}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
+}
+
+async function processSendMessage(
+  senderId: string,
+  contactIdentifier: string,
+  rawMessage: string,
+  sourceAction: string = 'whatsapp.draft'
+): Promise<string> {
+  // 1. DB contacts (via contactService)
+  const dbContact = (await findByName(contactIdentifier)) || (await findByAlias(contactIdentifier));
+
+  // 2. Fallback: WHATSAPP_CONTACTS env var
+  const envContacts = parseContacts(process.env.WHATSAPP_CONTACTS ?? '');
+  const envContact = envContacts.find(
+    (c) => c.name.toLowerCase() === contactIdentifier.toLowerCase()
+  );
+
+  const contact = dbContact
+    ? { name: dbContact.name, phone: dbContact.phone }
+    : envContact ?? null;
+
+  if (!contact) {
+    return `❌ "${contactIdentifier}" não encontrado. Cadastre com /criar-contato ou adicione em WHATSAPP_CONTACTS=nome:numero`;
+  }
+
+  const comm = await prisma.communication.create({
+    data: {
+      provider: 'WHATSAPP',
+      type: 'DRAFT',
+      to: contact.phone,
+      body: rawMessage,
+      status: 'AWAITING_APPROVAL',
+      metadata: { contactName: contact.name },
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actor: 'user',
+      action: sourceAction,
+      entity_type: 'Communication',
+      entity_id: comm.id,
+      summary: `Draft WhatsApp para ${contact.name} (${contact.phone}) via ${sourceAction}`,
+    },
+  });
+
+  await savePending(senderId, comm.id);
+  return draftPreview(contact.name, rawMessage);
 }
 
 // Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
@@ -288,36 +341,19 @@ async function handleIncomingWhatsApp(
       }
 
       case 'ALIAS_SHORTCUT': {
-        const contact = await findByAlias(args?.alias ?? '');
-        if (!contact) {
-          // Alias not registered — fall through to CREATE_TASK logic
+        responseText = await processSendMessage(
+          sender_id,
+          args?.alias ?? '',
+          args?.message ?? '',
+          'whatsapp.draft.alias'
+        );
+        if (responseText.includes('não encontrado')) {
+          // Alias not registered — fallback to CREATE_TASK logic
           const newTask = await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
           responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
-          break;
         }
-        const comm = await prisma.communication.create({
-          data: {
-            provider: 'WHATSAPP',
-            type: 'DRAFT',
-            to: contact.phone,
-            body: args?.message ?? '',
-            status: 'AWAITING_APPROVAL',
-            metadata: { contactName: contact.name },
-          },
-        });
-        await prisma.auditLog.create({
-          data: {
-            actor: 'user',
-            action: 'whatsapp.draft',
-            entity_type: 'Communication',
-            entity_id: comm.id,
-            summary: `Draft WhatsApp para ${contact.name} (${contact.phone}) via atalho ${args?.alias}`,
-          },
-        });
-        await savePending(sender_id, comm.id);
-        responseText = draftPreview(contact.name, args?.message ?? '');
         break;
       }
 
@@ -465,6 +501,16 @@ async function handleIncomingWhatsApp(
           break;
         }
 
+        if (classification.intent === 'SEND_MESSAGE') {
+          responseText = await processSendMessage(
+            sender_id,
+            classification.contact_name,
+            classification.message,
+            'whatsapp.draft.llm'
+          );
+          break;
+        }
+
         const newTask = await prisma.task.create({
           data: {
             title: args?.rawText || 'Sem título',
@@ -503,41 +549,11 @@ async function handleIncomingWhatsApp(
       }
 
       case 'SEND_TO': {
-        // 1. DB contacts (via contactService)
-        const dbContact = await findByName(args?.contactName ?? '');
-        // 2. Fallback: WHATSAPP_CONTACTS env var
-        const envContacts = parseContacts(process.env.WHATSAPP_CONTACTS ?? '');
-        const envContact = envContacts.find(
-          (c) => c.name.toLowerCase() === (args?.contactName ?? '').toLowerCase()
+        responseText = await processSendMessage(
+          sender_id,
+          args?.contactName ?? '',
+          args?.message ?? ''
         );
-        const contact = dbContact
-          ? { name: dbContact.name, phone: dbContact.phone }
-          : envContact ?? null;
-        if (!contact) {
-          responseText = `❌ "${args?.contactName}" não encontrado. Cadastre com /criar-contato ou adicione em WHATSAPP_CONTACTS=nome:numero`;
-          break;
-        }
-        const comm = await prisma.communication.create({
-          data: {
-            provider: 'WHATSAPP',
-            type: 'DRAFT',
-            to: contact.phone,
-            body: args?.message ?? '',
-            status: 'AWAITING_APPROVAL',
-            metadata: { contactName: contact.name },
-          },
-        });
-        await prisma.auditLog.create({
-          data: {
-            actor: 'user',
-            action: 'whatsapp.draft',
-            entity_type: 'Communication',
-            entity_id: comm.id,
-            summary: `Draft WhatsApp para ${contact.name} (${contact.phone})`,
-          },
-        });
-        await savePending(sender_id, comm.id);
-        responseText = draftPreview(contact.name, args?.message ?? '');
         break;
       }
 
@@ -745,22 +761,17 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
         await sendWhatsApp(sender_id, responseText);
       }
     } else {
-      // Passo 1: normalizar com OWNER_NAME global para detectar o contato
-      const normalized = await normalizeAudioCommand(text);
-      let finalNormalized = normalized;
+      // Passo 1: Tentar parser direto (mais rápido e fiel)
+      let parsed = parseCommand(text);
+      let commandToProcess = text;
 
-      // Passo 2: se for SEND_TO, buscar owner_alias específico do contato
-      const parsed = parseCommand(normalized);
-      if (parsed.intent === 'SEND_TO' && parsed.args?.contactName) {
-        const contact = await findByName(parsed.args.contactName);
-        const contactAlias = contact?.owner_alias;
-        const defaultAlias = process.env.OWNER_NAME ?? 'Rafael';
-        if (contactAlias && contactAlias !== defaultAlias) {
-          finalNormalized = await normalizeAudioCommand(text, contactAlias);
-        }
+      if (parsed.intent === 'CREATE_TASK') {
+        // Passo 2: Se não for comando direto, normalizar para estruturar
+        const normalized = await normalizeAudioCommand(text);
+        commandToProcess = normalized;
       }
 
-      const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
+      const result = await handleIncomingWhatsApp(sender_id, commandToProcess);
       await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
     }
 
