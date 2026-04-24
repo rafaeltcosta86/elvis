@@ -46,9 +46,13 @@ Analise a mensagem e retorne JSON com UMA destas estruturas:
   Ex: "agenda call com o João amanhã às 10h, 30 minutos" → {"intent":"CREATE_EVENT","title":"Call com João","date":"amanhã","time":"10:00","duration_min":30,"contact_name":"João"}
 
 - Apresentação de Elvis para um contato: {"intent":"INTRODUCE_SELF","contact_name":"<nome>","context":"<opcional: contexto da relação mencionado>"}
-  Use quando o usuário pedir para o Elvis se apresentar a alguém, informar quem ele é ou iniciar contato.
+  Use quando o usuário pedir para o Elvis se apresentar, se introduzir ou iniciar contato com alguém em nome próprio.
+  ATENÇÃO: "se apresente para X", "se apresenta pro X", "se introduz para X" → INTRODUCE_SELF (Elvis é o sujeito).
+  Não confundir com SEND_MESSAGE: aqui Elvis se apresenta, não envia uma mensagem qualquer.
   Ex: "se apresenta pro João, diz que trabalhamos juntos na McKinsey" → {"intent":"INTRODUCE_SELF","contact_name":"João","context":"trabalhamos juntos na McKinsey"}
   Ex: "se apresenta pro João" → {"intent":"INTRODUCE_SELF","contact_name":"João"}
+  Ex: "se apresente para o Guilherme" → {"intent":"INTRODUCE_SELF","contact_name":"Guilherme"}
+  Ex: "Elvis, se apresente para a Ana" → {"intent":"INTRODUCE_SELF","contact_name":"Ana"}
 
 - Qualquer outra coisa: {"intent":"UNKNOWN"}
 
