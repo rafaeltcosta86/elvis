@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma';
 import redis from '../lib/redis';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 const startTime = Date.now();
@@ -14,7 +15,7 @@ router.get('/status', async (_req, res) => {
     await prisma.$queryRaw`SELECT 1`;
     dbStatus = 'ok';
   } catch (err) {
-    console.error('DB check failed:', err);
+    console.error('DB check failed:', sanitizeError(err));
   }
 
   // Check redis
@@ -22,7 +23,7 @@ router.get('/status', async (_req, res) => {
     await redis.ping();
     redisStatus = 'ok';
   } catch (err) {
-    console.error('Redis check failed:', err);
+    console.error('Redis check failed:', sanitizeError(err));
   }
 
   const uptime = Math.floor((Date.now() - startTime) / 1000);
