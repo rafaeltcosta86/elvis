@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-import { classifyIntent, normalizeAudioCommand, type LLMClassification } from '../llmService';
+import { classifyIntent, normalizeAudioCommand, generateIntroduction, type LLMClassification } from '../llmService';
 
 function groqResponse(content: string) {
   return {
@@ -272,5 +272,64 @@ describe('normalizeAudioCommand', () => {
     // verifica que o prompt enviado contém "Rafa"
     const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
     expect(body.messages[0].content).toContain('Rafa');
+  });
+});
+
+describe('INTRODUCE_SELF intent', () => {
+  it('extrai contact_name e context quando fornecidos', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"INTRODUCE_SELF","contact_name":"João","context":"trabalhamos juntos na McKinsey"}')
+    );
+    const result = await classifyIntent('se apresenta pro João, diz que trabalhamos juntos na McKinsey');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'João',
+      context: 'trabalhamos juntos na McKinsey',
+    });
+  });
+
+  it('extrai apenas contact_name quando context está ausente', async () => {
+    mockFetch.mockResolvedValue(
+      groqResponse('{"intent":"INTRODUCE_SELF","contact_name":"João"}')
+    );
+    const result = await classifyIntent('se apresenta pro João');
+    expect(result).toEqual<LLMClassification>({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'João',
+    });
+  });
+});
+
+describe('generateIntroduction', () => {
+  it('gera mensagem usando o LLM incorporando contexto', async () => {
+    const expectedMsg = 'Olá João, sou o Elvis, assistente do Rafael. O Rafael mencionou que trabalharam juntos na McKinsey.';
+    mockFetch.mockResolvedValue(groqResponse(expectedMsg));
+
+    const result = await generateIntroduction('João', 'trabalhamos juntos na McKinsey', 'Rafael');
+
+    expect(result).toBe(expectedMsg);
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.messages[0].content).toContain('João');
+    expect(body.messages[0].content).toContain('trabalhamos juntos na McKinsey');
+    expect(body.messages[0].content).toContain('Rafael');
+  });
+
+  it('gera mensagem genérica quando context está ausente', async () => {
+    const expectedMsg = 'Olá João, eu sou o Elvis, assistente do Rafael.';
+    mockFetch.mockResolvedValue(groqResponse(expectedMsg));
+
+    const result = await generateIntroduction('João', undefined, 'Rafael');
+
+    expect(result).toBe(expectedMsg);
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.messages[0].content).toContain('João');
+    // We don't check for 'contexto' because it's in the system prompt guidelines anyway
+  });
+
+  it('usa fallback quando API key está ausente', async () => {
+    delete process.env.GROQ_API_KEY;
+    const result = await generateIntroduction('João', 'contexto', 'Rafael');
+    expect(result).toBe('Olá João, eu sou o Elvis, assistente do Rafael.');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
