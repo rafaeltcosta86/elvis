@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getOrCreateProfile, updateInferredPrefs } from '../lib/userModel';
 import prisma from '../lib/prisma';
+import { sanitizeError } from '../lib/logger';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ router.get('/user/profile', async (_req, res) => {
     const profile = await getOrCreateProfile();
     res.json(profile);
   } catch (err) {
-    console.error('GET /user/profile error:', err);
+    console.error('GET /user/profile error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -56,7 +57,7 @@ router.post('/user/profile/feedback', async (req, res) => {
       message: messages[action as FeedbackAction],
     });
   } catch (err) {
-    console.error('POST /user/profile/feedback error:', err);
+    console.error('POST /user/profile/feedback error:', sanitizeError(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });
