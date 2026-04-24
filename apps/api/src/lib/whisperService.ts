@@ -2,6 +2,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
+const DEFAULT_WHISPER_PROMPT = 'Claude Code, Anthropic, Elvis, Rafael';
 
 export async function transcribeAudio(buffer: Buffer, mimetype: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -21,6 +22,7 @@ export async function transcribeAudio(buffer: Buffer, mimetype: string): Promise
     form.append('model', 'whisper-large-v3-turbo');
     form.append('language', 'pt');
     form.append('response_format', 'json');
+    form.append('prompt', process.env.WHISPER_PROMPT || DEFAULT_WHISPER_PROMPT);
 
     const response = await axios.post(GROQ_API_URL, form, {
       headers: {
