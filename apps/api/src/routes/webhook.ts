@@ -352,7 +352,7 @@ async function handleIncomingWhatsApp(
           const newTask = await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
-          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          responseText = `✅ Tarefa criada: "${newTask.title}"`;
         }
         break;
       }
@@ -518,7 +518,7 @@ async function handleIncomingWhatsApp(
           },
         });
 
-        responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+        responseText = `✅ Tarefa criada: "${newTask.title}"`;
         break;
       }
 

@@ -227,6 +227,8 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
     await webhookPost('/xpto oi');
 
     expect(prisma.task.create).toHaveBeenCalled();
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toBe('✅ Tarefa criada: "/xpto oi"');
   });
 });
 
@@ -308,6 +310,8 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
     await webhookPost('comprar pão amanhã');
 
     expect(prisma.task.create).toHaveBeenCalled();
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toBe('✅ Tarefa criada: "comprar pão"');
   });
 });
 
