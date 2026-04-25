@@ -344,9 +344,8 @@ curl -X POST /webhook/nanoclaw -d '{"message":"/li oi"}'
 
 > Custo estimado: $0 no free tier do Groq (Whisper Large v3) para até 100 msg/dia com 50% voz.
 
-- [x] Receber payload de áudio OGG do webhook NanoClaw/Baileys
-- [x] Transcrever via Groq Whisper (`whisper-large-v3`, free tier)
-- [x] Corrigir transcrição de nomes próprios via parâmetro `prompt` (ex: "Claude Code", "Anthropic")
+- [ ] Receber payload de áudio OGG do webhook NanoClaw/Baileys
+- [ ] Transcrever via Groq Whisper (`whisper-large-v3`, free tier)
 - [ ] Passar transcrição ao `handleIncomingWhatsApp` como texto normal
 - [ ] Testar com mensagens de voz reais no WhatsApp
 
@@ -442,6 +441,4 @@ pnpm lint && pnpm build
 | 2026-04-17 | Sentinel [COWORK] concluído: Automação de issues architecture-violation para o board PDLC (coluna 💡 Ideia) usando PROJECT_TOKEN. |
 | 2026-04-17 | Comandos [COWORK] concluído: Edição de contatos via linguagem natural (EDIT_CONTACT) integrada ao webhook — **243 testes passando** ✅ |
 | 2026-04-24 | Testing [COWORK] concluído: Adicionados testes unitários para MockAdapter em packages/shared. |
-| 2026-04-25 | Feat [COWORK] concluído: Elvis se apresenta para um contato (INTRODUCE_SELF) com contexto opcional e geração via LLM — **306 testes passando** ✅ |
-| 2026-04-25 | Fix [COWORK] concluído: Adicionado parâmetro `prompt` no Whisper para melhorar transcrição de nomes próprios. |
 | 2026-05-15 | Reminders [COWORK] concluído: Implementação de lembretes automáticos na criação de tarefas, job de disparo e snooze (1h, 4h, amanhã) — **M12 completo** ✅ |

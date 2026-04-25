@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { reminderJob } from '../reminderJob';
-import prisma from '../../../../api/src/lib/prisma';
-import { sendWhatsApp } from '../../../../api/src/lib/nanoclawClient';
+import prisma from '../../lib/prisma';
+import { sendWhatsApp } from '../../lib/nanoclawClient';
 import Redis from 'ioredis';
 
-vi.mock('../../../../api/src/lib/prisma', () => ({
+vi.mock('../../lib/prisma', () => ({
   default: {
     reminder: {
       findMany: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock('../../../../api/src/lib/prisma', () => ({
   },
 }));
 
-vi.mock('../../../../api/src/lib/nanoclawClient', () => ({
+vi.mock('../../lib/nanoclawClient', () => ({
   sendWhatsApp: vi.fn(),
 }));
 

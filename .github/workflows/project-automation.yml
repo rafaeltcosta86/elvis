@@ -25,7 +25,7 @@ env:
 jobs:
   move-violation-to-board:
     name: Violação detectada → 💡 Ideia
-    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'architecture-violation'
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'stage:architecture-violation'
     runs-on: ubuntu-latest
     steps:
       - name: Adicionar issue ao board na coluna Ideia
@@ -142,23 +142,19 @@ jobs:
               });
             };
 
-            // Sempre tentar mover o PR (caso esteja no board sem issue linkada)
-            if (linkedIssues.length === 0) {
-              await moveItem(pr.node_id).catch(() => {});
-              console.log(`PR #${prNumber} adicionado ao board em Code Review`);
-            }
-
-            // Mover issues linkadas (independentemente de o PR estar no board)
-            for (const issueNumber of linkedIssues) {
-              try {
+            if (linkedIssues.length > 0) {
+              // Mover as issues linkadas
+              for (const issueNumber of linkedIssues) {
                 const { data: issue } = await github.rest.issues.get({
                   owner: repoOwner, repo: repoName, issue_number: issueNumber
                 });
                 await moveItem(issue.node_id);
                 console.log(`Issue #${issueNumber} movida para Code Review`);
-              } catch (e) {
-                console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
+            } else {
+              // Sem issue linkada: adiciona o próprio PR ao board
+              await moveItem(pr.node_id);
+              console.log(`PR #${prNumber} adicionado ao board em Code Review`);
             }
 
             // Adicionar label stage:revisao
@@ -214,21 +210,15 @@ jobs:
               });
             };
 
-            // Sempre tentar mover o PR (caso esteja no board sem issue linkada)
-            if (linkedIssues.length === 0) {
-              await moveItemToStatus(pr.node_id, process.env.STATUS_PULL_REQUEST).catch(() => {});
-            }
-
-            // Mover issues linkadas (independentemente de o PR estar no board)
-            for (const issueNumber of linkedIssues) {
-              try {
+            if (linkedIssues.length > 0) {
+              for (const issueNumber of linkedIssues) {
                 const { data: issue } = await github.rest.issues.get({
                   owner: repoOwner, repo: repoName, issue_number: issueNumber
                 });
                 await moveItemToStatus(issue.node_id, process.env.STATUS_PULL_REQUEST);
-              } catch (e) {
-                console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
+            } else {
+              await moveItemToStatus(pr.node_id, process.env.STATUS_PULL_REQUEST);
             }
 
             // Atualizar labels
@@ -288,18 +278,14 @@ jobs:
               });
             };
 
-            // Sempre mover o PR (caso esteja no board sem issue linkada)
-            await moveToProducao(pr.node_id).catch(() => {});
-
-            // Mover issues linkadas (independentemente de o PR estar no board)
-            for (const issueNumber of linkedIssues) {
-              try {
+            if (linkedIssues.length > 0) {
+              for (const issueNumber of linkedIssues) {
                 const { data: issue } = await github.rest.issues.get({
                   owner: repoOwner, repo: repoName, issue_number: issueNumber
                 });
                 await moveToProducao(issue.node_id);
                 console.log(`Issue #${issueNumber} movida para Produção`);
-              } catch (e) {
-                console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
+            } else {
+              await moveToProducao(pr.node_id);
             }

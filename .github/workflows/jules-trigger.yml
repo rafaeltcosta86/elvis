@@ -6,8 +6,8 @@ on:
 
 jobs:
   trigger-jules-on-spec-approved:
-    name: spec:aprovado → acionar Jules para implementação
-    if: github.event.label.name == 'spec:aprovado'
+    name: stage:spec-aprovado → acionar Jules para implementação
+    if: github.event.label.name == 'stage:spec-aprovado'
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -72,7 +72,7 @@ jobs:
 
   trigger-jules:
     name: Notificar Jules sobre violação de arquitetura
-    if: contains(github.event.issue.labels.*.name, 'architecture-violation')
+    if: contains(github.event.issue.labels.*.name, 'stage:architecture-violation')
     runs-on: ubuntu-latest
     permissions:
       issues: write

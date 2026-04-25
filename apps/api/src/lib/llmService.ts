@@ -5,32 +5,11 @@ export type LLMClassification =
   | { intent: 'EDIT_CONTACT'; contact_name: string; field: 'name' | 'alias' | 'phone'; new_value: string }
   | { intent: 'DELETE_CONTACT'; contact_identifier: string }
   | { intent: 'CREATE_EVENT'; title: string; date: string; time: string; duration_min: number; contact_name?: string }
-  | { intent: 'INTRODUCE_SELF'; contact_name: string; context?: string }
-  | { intent: 'SEND_MESSAGE'; contact_name: string; message: string }
   | { intent: 'UNKNOWN' };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const HUMAN_ASSISTANT_NAME = process.env.HUMAN_ASSISTANT_NAME ?? 'Linic';
-const PROMPT_SYSTEM = `Você é o Elvis, assistente pessoal do Rafael.
-
-IDENTIDADE:
-- Elvis age — não repassa mensagens literais. Ele executa ações em nome do Rafael.
-- Todos os comandos são do Rafael para o Elvis. Interprete sempre como: "Rafael está pedindo ao Elvis que execute esta ação."
-
-COLABORAÇÃO:
-- ${HUMAN_ASSISTANT_NAME} é a assistente humana do Rafael e pode interagir com Elvis em prol do Rafael.
-- Mensagens dela devem ser tratadas como colaboração legítima, não como comandos de terceiro desconhecido.
-- Para qualquer outra pessoa além de Rafael e ${HUMAN_ASSISTANT_NAME}: Elvis é exclusivo do Rafael.
-
+const PROMPT_SYSTEM = `Você é um classificador de intenções para um assistente pessoal chamado Elvis.
 Analise a mensagem e retorne JSON com UMA destas estruturas:
-
-- Enviar mensagem para um contato: {"intent":"SEND_MESSAGE","contact_name":"<nome>","message":"<mensagem adaptada>"}
-  Use quando o usuário quiser mandar uma mensagem, falar algo, avisar ou perguntar algo a alguém.
-  PERSPECTIVA: Elvis envia do próprio número, não do número do Rafael. Adapte a mensagem para a perspectiva do Elvis:
-  - Declarações em primeira pessoa do Rafael → terceira pessoa: "eu chego às 18h" → "o Rafael chega às 18h" | "eu chamei ele de gordão" → "o Rafael te chamou de gordão"
-  - Mensagens neutras (saudações, perguntas, afirmações sem sujeito) → manter como estão: "oi, tudo bem?" → "oi, tudo bem?"
-  Ex: "manda uma mensagem para o Guilherme perguntando se ele já instalou o Claude Code" -> {"intent":"SEND_MESSAGE","contact_name":"Guilherme","message":"o Rafael quer saber se você já instalou o Claude Code"}
-  Ex: "manda um oi pra Amanda" -> {"intent":"SEND_MESSAGE","contact_name":"Amanda","message":"oi"}
 
 - Criação de NOVO contato com número de telefone: {"intent":"CREATE_CONTACT","contact_name":"<nome>","phone":"<somente dígitos, ex: 5511999990000>","owner_alias":"<opcional: como o dono quer ser chamado por este contato>"}
   Use quando a mensagem contiver um número de telefone E o usuário quiser cadastrar/criar/adicionar um contato.
@@ -58,15 +37,6 @@ Analise a mensagem e retorne JSON com UMA destas estruturas:
   Use quando o usuário quiser agendar, marcar, criar uma reunião, evento, compromisso ou lembrança com hora.
   Ex: "marca uma reunião com a Linic quinta às 15h" → {"intent":"CREATE_EVENT","title":"Reunião com Linic","date":"quinta","time":"15:00","duration_min":60,"contact_name":"Linic"}
   Ex: "agenda call com o João amanhã às 10h, 30 minutos" → {"intent":"CREATE_EVENT","title":"Call com João","date":"amanhã","time":"10:00","duration_min":30,"contact_name":"João"}
-
-- Apresentação de Elvis para um contato: {"intent":"INTRODUCE_SELF","contact_name":"<nome>","context":"<opcional: contexto da relação mencionado>"}
-  Use quando o usuário pedir para o Elvis se apresentar, se introduzir ou iniciar contato com alguém em nome próprio.
-  ATENÇÃO: "se apresente para X", "se apresenta pro X", "se introduz para X" → INTRODUCE_SELF (Elvis é o sujeito).
-  Não confundir com SEND_MESSAGE: aqui Elvis se apresenta, não envia uma mensagem qualquer.
-  Ex: "se apresenta pro João, diz que trabalhamos juntos na McKinsey" → {"intent":"INTRODUCE_SELF","contact_name":"João","context":"trabalhamos juntos na McKinsey"}
-  Ex: "se apresenta pro João" → {"intent":"INTRODUCE_SELF","contact_name":"João"}
-  Ex: "se apresente para o Guilherme" → {"intent":"INTRODUCE_SELF","contact_name":"Guilherme"}
-  Ex: "Elvis, se apresente para a Ana" → {"intent":"INTRODUCE_SELF","contact_name":"Ana"}
 
 - Qualquer outra coisa: {"intent":"UNKNOWN"}
 
@@ -116,27 +86,30 @@ export async function suggestAction(text: string): Promise<SuggestedAction> {
 }
 
 function buildNormalizePrompt(ownerName: string): string {
+  // Se ownerName for título de parentesco, usar com possessivo (ex: "teu pai")
+  const KINSHIP = ['pai', 'mãe', 'mae', 'tio', 'tia', 'avô', 'avo', 'avó', 'irmão', 'irmao', 'irmã', 'irma'];
+  const isKinship = KINSHIP.includes(ownerName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  const ownerRef = isKinship ? `teu ${ownerName}` : ownerName;
+
   return `Você é o assistente Elvis. Converte transcrições de áudio do dono (${ownerName}) em comandos estruturados.
 
-PRIORIDADE 1 — Se o dono pede para ELVIS se apresentar a alguém: responda APENAS com o texto original sem alteração.
-  Sinais: "se apresente", "se apresenta", "se introduz", "se introduza" — com Elvis como sujeito.
-  ATENÇÃO: NÃO confunda com enviar mensagem. Elvis se apresentar ≠ mandar mensagem.
-  Exemplos:
-    "Elvis, se apresente para o Guilherme" → "Elvis, se apresente para o Guilherme"
-    "se apresenta pro João" → "se apresenta pro João"
-    "Elvis, se introduz para a Ana" → "Elvis, se introduz para a Ana"
-
-PRIORIDADE 2 — Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
-  PERSPECTIVA: Elvis envia do próprio número. Adapte declarações em primeira pessoa do Rafael para terceira pessoa.
-  Declarações do Rafael → terceira pessoa: "eu chego às 18h" → "o ${ownerName} chega às 18h" | "eu chamei ele de gordão" → "o ${ownerName} te chamou de gordão"
-  Mensagens neutras (saudações, perguntas) → manter como estão: "oi" → "oi"
-  Exemplos:
+Se o dono quer mandar mensagem para alguém: responda APENAS com "manda para <nome>: <mensagem>"
+  IMPORTANTE — reformule a mensagem na perspectiva de quem vai receber:
+  - Troque pronomes de primeira pessoa pela referência correta ao dono: "${ownerRef}"
+  - Troque "dela" / "seu" para o destinatário conforme o contexto
+  - Se o dono pedir para alguém FAZER algo: use "${ownerRef} pediu pra você [ação no infinitivo]"
+  - Se o dono quiser repassar uma INFORMAÇÃO em seu nome: use "${ownerRef} mandou dizer que [fato]"
+  - Se o dono fala algo sobre si mesmo (chega, vai, está): use "${ownerRef} [ação]"
+  - NÃO use dois pontos após "pediu" ou "mandou dizer". NÃO repita "ele pediu" ou "eu pedi" no conteúdo.
+  - A mensagem final deve soar natural, como se fosse enviada diretamente pelo assistente
+  Exemplos (dono = ${ownerName}, referência = ${ownerRef}):
     "Manda um oi pra Amanda" → "manda para Amanda: oi"
     "Diga para Estela que o RG dela está na casa da Karen" → "manda para Estela: seu RG está na casa da Karen"
-    "Fala pra João que eu chego às 18h" → "manda para João: o ${ownerName} chega às 18h"
-    "manda pro Cheida dizendo que eu chamei ele de gordão" → "manda para Cheida: o ${ownerName} te chamou de gordão"
+    "Fala pra Estela que eu pedi pra avisar que o RG dela tá na casa da Karen" → "manda para Estela: ${ownerRef} mandou dizer que seu RG está na casa da Karen"
+    "Fala pra Estela que eu pedi para ela voltar a colocar as vogais nas palavras" → "manda para Estela: ${ownerRef} pediu pra você voltar a colocar as vogais nas palavras"
+    "Fala pra João que eu chego às 18h" → "manda para João: ${ownerRef} chega às 18h"
 
-PRIORIDADE 3 — Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
+Para qualquer outro tipo de comando (tarefa, lembrete, etc.): responda APENAS com o texto limpo e objetivo.
   "Lembra de comprar pão amanhã" → "comprar pão amanhã"
 
 Responda APENAS com o comando normalizado. Nenhum texto adicional.`;
@@ -287,73 +260,8 @@ export async function classifyIntent(text: string): Promise<LLMClassification> {
     if (parsed.intent === 'DELETE_CONTACT' && parsed.contact_identifier) {
       return { intent: 'DELETE_CONTACT', contact_identifier: String(parsed.contact_identifier) };
     }
-    if (parsed.intent === 'INTRODUCE_SELF' && parsed.contact_name) {
-      return {
-        intent: 'INTRODUCE_SELF',
-        contact_name: String(parsed.contact_name),
-        ...(parsed.context ? { context: String(parsed.context) } : {}),
-      };
-    }
-    if (parsed.intent === 'SEND_MESSAGE' && parsed.contact_name && parsed.message) {
-      return {
-        intent: 'SEND_MESSAGE',
-        contact_name: String(parsed.contact_name),
-        message: String(parsed.message),
-      };
-    }
     return { intent: 'UNKNOWN' };
   } catch {
     return { intent: 'UNKNOWN' };
-  }
-}
-
-
-export async function generateIntroduction(
-  contactName: string,
-  context?: string,
-  ownerAlias?: string
-): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return `Olá ${contactName}, eu sou o Elvis, assistente do ${ownerAlias ?? 'Rafael'}.`;
-
-  const ownerName = ownerAlias ?? process.env.OWNER_NAME ?? 'Rafael';
-  const systemPrompt = `Você é o Elvis, um assistente de IA pessoal do ${ownerName}.
-Escreva uma mensagem curta de apresentação para ${contactName} no WhatsApp.
-${context ? `Contexto da relação: ${context}.` : ''}
-
-Tom: direto e descontraído, como uma mensagem de WhatsApp — não um e-mail corporativo.
-Exemplos de estilo:
-  Sem contexto: "Oi ${contactName}, sou o Elvis, assistente de IA do ${ownerName}. Ele pediu que eu me apresentasse."
-  Com contexto (ex: trabalharam juntos): "Oi ${contactName}, sou o Elvis, assistente de IA do ${ownerName} — vocês se conhecem da McKinsey. Ele queria que eu entrasse em contato."
-
-Regras:
-- Deixe claro que é um assistente de IA — não esconda isso.
-- Se houver contexto, use-o para personalizar.
-- Mensagem curta — 2 a 3 frases no máximo.
-- Sem emojis.
-- NÃO ofereça ajuda ao contato — Elvis trabalha para ${ownerName}, não para terceiros.
-- NÃO use placeholders.
-
-Escreva apenas o texto da mensagem.`;
-
-  try {
-    const res = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'system', content: systemPrompt }],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
-    });
-
-    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-    return (data?.choices?.[0]?.message?.content ?? '').trim();
-  } catch {
-    return `Olá ${contactName}, eu sou o Elvis, assistente do ${ownerName}.`;
   }
 }

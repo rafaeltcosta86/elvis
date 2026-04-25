@@ -21,6 +21,7 @@ vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
   normalizeAudioCommand: vi.fn((text: string) => Promise.resolve(text)),
+  extractReminder: vi.fn(),
 }));
 
 vi.mock('../../lib/redis', () => ({
