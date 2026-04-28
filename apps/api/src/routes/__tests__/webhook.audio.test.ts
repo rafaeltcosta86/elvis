@@ -101,8 +101,8 @@ describe('POST /webhook/baileys-audio', () => {
     expect(res.status).toBe(200);
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = vi.mocked(sendWhatsApp).mock.calls[0][1];
-    expect(sentText).toContain('lembra de ligar pra Linic amanhã');
-    expect(sentText).toContain('✅');
+    expect(sentText).toContain('🎙️ Entendi: "lembra de ligar pra Linic amanhã"');
+    expect(sentText).toContain('✅ Tarefa criada: "lembra de ligar pra Linic amanhã"');
   });
 
   it('áudio próprio (is_forwarded=false): SEND_TO cria draft e mostra preview com confirm/cancel', async () => {

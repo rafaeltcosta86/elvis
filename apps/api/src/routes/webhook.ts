@@ -352,7 +352,7 @@ async function handleIncomingWhatsApp(
           const newTask = await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
-          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          responseText = `✅ Tarefa criada: "${newTask.title}"`;
         }
         break;
       }
@@ -518,7 +518,7 @@ async function handleIncomingWhatsApp(
           },
         });
 
-        responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+        responseText = `✅ Tarefa criada: "${newTask.title}"`;
         break;
       }
 
@@ -701,7 +701,10 @@ async function processWebhook(
     if (!sender_id || !message_text) return res.json({ ok: true });
 
     const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    await sendWhatsApp(sender_id, responseText);
+    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
+      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
+      : responseText;
+    await sendWhatsApp(sender_id, finalResponse);
     res.json({ ok: true });
   } catch (err) {
     console.error(`Webhook ${provider} error:`, sanitizeError(err));

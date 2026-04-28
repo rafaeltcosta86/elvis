@@ -444,4 +444,5 @@ pnpm lint && pnpm build
 | 2026-04-24 | Testing [COWORK] concluído: Adicionados testes unitários para MockAdapter em packages/shared. |
 | 2026-04-25 | Feat [COWORK] concluído: Elvis se apresenta para um contato (INTRODUCE_SELF) com contexto opcional e geração via LLM — **306 testes passando** ✅ |
 | 2026-04-25 | Fix [COWORK] concluído: Adicionado parâmetro `prompt` no Whisper para melhorar transcrição de nomes próprios. |
+| 2026-04-26 | UX [COWORK] concluído: Melhoria na confirmação de criação de tarefa (removido ID e hint, exibição do título). |
 | 2026-04-26 | Fix [COWORK] concluído: Implementada camada de correção fonética pós-Whisper para nomes próprios ambíguos (ex: Cloud Code -> Claude Code) — **309 testes passando** ✅ |
