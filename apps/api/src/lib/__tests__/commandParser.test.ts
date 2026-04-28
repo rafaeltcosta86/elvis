@@ -33,6 +33,13 @@ describe('parseCommand', () => {
         args: { commandName: '/contatos' },
       });
     });
+
+    it('returns DESCRIBE_COMMAND intent even if command is not in registry (handled by webhook)', () => {
+      expect(parseCommand('/unknown desc')).toEqual({
+        intent: 'DESCRIBE_COMMAND',
+        args: { commandName: '/unknown' },
+      });
+    });
   });
 
   describe('/contatos', () => {

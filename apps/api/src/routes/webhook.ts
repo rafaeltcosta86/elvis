@@ -198,7 +198,7 @@ async function handleIncomingWhatsApp(
 
   switch (intent) {
       case 'LIST_COMMANDS': {
-        const list = COMMAND_REGISTRY.map((c) => `${c.name} — ${c.desc}`).join('\n');
+        const list = COMMAND_REGISTRY.map((c) => `${c.usage || c.name} — ${c.desc}`).join('\n');
         responseText = `🗂️ Comandos disponíveis:\n\n${list}\n\n💡 Use /<comando> desc para saber mais sobre qualquer comando.`;
         break;
       }

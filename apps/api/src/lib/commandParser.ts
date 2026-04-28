@@ -44,6 +44,9 @@ export const COMMAND_REGISTRY = [
   { name: '/done', desc: 'Marca uma tarefa como concluída', usage: '/done <id>' },
   { name: '/mais-proativo', desc: 'Aumenta a proatividade do Elvis' },
   { name: '/menos-proativo', desc: 'Diminui a proatividade do Elvis' },
+  { name: '/corrigir', desc: 'Reseta suas preferências aprendidas' },
+  { name: '/confirmar', desc: 'Confirma uma ação pendente', usage: '/confirmar <id>' },
+  { name: '/cancelar', desc: 'Cancela uma ação pendente', usage: '/cancelar <id>' },
   { name: '/comandos', desc: 'Lista todos os comandos disponíveis' },
 ];
 
