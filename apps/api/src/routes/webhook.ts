@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { type Task } from '@prisma/client';
-import { parseCommand } from '../lib/commandParser';
+import { parseCommand, COMMAND_REGISTRY } from '../lib/commandParser';
 import { sendWhatsApp } from '../lib/nanoclawClient';
 import prisma from '../lib/prisma';
 import { addDays, nextMonday, nextDay, format, parseISO, setHours, setMinutes } from 'date-fns';
@@ -212,6 +212,22 @@ async function handleIncomingWhatsApp(
   let responseText = '';
 
   switch (intent) {
+      case 'LIST_COMMANDS': {
+        const list = COMMAND_REGISTRY.map((c) => `${c.usage || c.name} — ${c.desc}`).join('\n');
+        responseText = `🗂️ Comandos disponíveis:\n\n${list}\n\n💡 Use /<comando> desc para saber mais sobre qualquer comando.`;
+        break;
+      }
+
+      case 'DESCRIBE_COMMAND': {
+        const cmd = COMMAND_REGISTRY.find((c) => c.name === args?.commandName);
+        if (cmd) {
+          responseText = `${cmd.name} — ${cmd.desc}${cmd.usage ? `\nUso: ${cmd.usage}` : ''}`;
+        } else {
+          responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
+        }
+        break;
+      }
+
       case 'LIST_CONTACTS': {
         const contacts = await listContacts();
         if (contacts.length === 0) {
@@ -356,14 +372,25 @@ async function handleIncomingWhatsApp(
       }
 
       case 'ALIAS_SHORTCUT': {
-        const contact = await findByAlias(args?.alias ?? '');
-        if (!contact) {
-          // Alias not registered — fall through to CREATE_TASK logic
+        responseText = await processSendMessage(
+          sender_id,
+          args?.alias ?? '',
+          args?.message ?? '',
+          'whatsapp.draft.alias'
+        );
+        if (responseText.includes('não encontrado')) {
+          // AC4: If message is "desc" and alias not found, it's likely an unknown command help request
+          if (args?.message?.toLowerCase() === 'desc') {
+            responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
+            break;
+          }
+
+          // Alias not registered — fallback to CREATE_TASK logic
           const newTask = await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
-          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
-          break;
+          responseText = `✅ Tarefa criada: "${newTask.title}"`;
+
         }
         const comm = await prisma.communication.create({
           data: {
@@ -565,11 +592,8 @@ async function handleIncomingWhatsApp(
           });
         }
 
-        responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+        responseText = `✅ Tarefa criada: "${newTask.title}"`;
 
-        if (!reminder) {
-          responseText += `\n\n⚠️ Não consegui identificar data/hora para o lembrete. A tarefa foi criada sem lembrete.`;
-        }
         break;
       }
 
@@ -739,8 +763,7 @@ async function handleIncomingWhatsApp(
       }
 
       case 'UNKNOWN': {
-        responseText =
-          'Não entendi. Comandos:\n/hoje — resumo\n/done <id> — pronto\n/adiar <id> tomorrow — adiar\n/semana — semana\n/email — e-mails\nmanda para <nome>: <msg>';
+        responseText = '❌ Não entendi. Use /comandos para ver a lista de comandos disponíveis.';
         break;
       }
     }
@@ -762,7 +785,10 @@ async function processWebhook(
     if (!sender_id || !message_text) return res.json({ ok: true });
 
     const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    await sendWhatsApp(sender_id, responseText);
+    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
+      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
+      : responseText;
+    await sendWhatsApp(sender_id, finalResponse);
     res.json({ ok: true });
   } catch (err) {
     console.error(`Webhook ${provider} error:`, sanitizeError(err));

@@ -447,4 +447,5 @@ pnpm lint && pnpm build
 | 2026-04-25 | Fix [COWORK] concluído: Adicionado parâmetro `prompt` no Whisper para melhorar transcrição de nomes próprios. |
 | 2026-04-26 | UX [COWORK] concluído: Melhoria na confirmação de criação de tarefa (removido ID e hint, exibição do título). |
 | 2026-04-26 | Fix [COWORK] concluído: Implementada camada de correção fonética pós-Whisper para nomes próprios ambíguos (ex: Cloud Code -> Claude Code) — **309 testes passando** ✅ |
+| 2026-04-28 | Feat [COWORK] concluído: Adicionados comandos `/comandos` (lista) e `/<cmd> desc` (ajuda detalhada) com registro centralizado — **263 testes passando** ✅ |
 | 2026-05-15 | Reminders [COWORK] concluído: Implementação de lembretes automáticos na criação de tarefas, job de disparo e snooze (1h, 4h, amanhã) — **M12 completo** ✅ |

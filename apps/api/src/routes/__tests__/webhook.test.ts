@@ -104,6 +104,8 @@ describe('Webhook — LIST_CONTACTS', () => {
     vi.clearAllMocks();
     process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
     (sendWhatsApp as any).mockResolvedValue(undefined);
+    (findByName as any).mockResolvedValue(null);
+    (findByAlias as any).mockResolvedValue(null);
   });
 
   it('retorna mensagem de lista vazia quando não há contatos', async () => {
@@ -235,7 +237,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('✅ Entendi: Tarefa criada!');
+    expect(sentText).toBe('🎙️ Entendi: "/xpto oi"\n\n✅ Tarefa criada: "/xpto oi"');
   });
 });
 
@@ -318,7 +320,7 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('✅ Entendi: Tarefa criada!');
+    expect(sentText).toBe('🎙️ Entendi: "comprar pão amanhã"\n\n✅ Tarefa criada: "comprar pão"');
   });
 });
 
@@ -569,5 +571,93 @@ describe('Webhook — CREATE_EVENT', () => {
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('❌');
+  });
+});
+
+describe('Webhook — INTRODUCE_SELF', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (prisma.communication.create as any).mockResolvedValue({ id: 'comm-intro-001' });
+    (prisma.auditLog.create as any).mockResolvedValue({});
+  });
+
+  it('retorna erro quando o contato não é encontrado', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'Inexistente',
+    });
+    (findByName as any).mockResolvedValue(null);
+    (findByAlias as any).mockResolvedValue(null);
+
+    await webhookPost('se apresenta pro Inexistente');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('❌ Contato "Inexistente" não encontrado');
+  });
+
+  it('cria draft e retorna preview ternário quando contato existe', async () => {
+    const contact = { id: 'c1', name: 'João', phone: '5511988887777', owner_alias: 'Rafael', aliases: [] };
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'INTRODUCE_SELF',
+      contact_name: 'João',
+      context: 'McKinsey',
+    });
+    (findByName as any).mockResolvedValue(contact);
+    (generateIntroduction as any).mockResolvedValue('Olá João, sou o Elvis assistente do Rafael da McKinsey.');
+
+    await webhookPost('se apresenta pro João, diz que somos da McKinsey');
+
+    expect(generateIntroduction).toHaveBeenCalledWith('João', 'McKinsey', 'Rafael');
+    expect(prisma.communication.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          to: '5511988887777',
+          body: 'Olá João, sou o Elvis assistente do Rafael da McKinsey.',
+          status: 'AWAITING_APPROVAL',
+        }),
+      })
+    );
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('Apresentação para João');
+    expect(sentText).toContain('Olá João, sou o Elvis assistente do Rafael da McKinsey.');
+    expect(sentText).toContain('1️⃣ Confirmar');
+  });
+});
+
+describe('Webhook — LIST_COMMANDS / DESCRIBE_COMMAND', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (findByName as any).mockResolvedValue(null);
+    (findByAlias as any).mockResolvedValue(null);
+  });
+
+  it('retorna lista de comandos formatada com usage (AC1)', async () => {
+    await webhookPost('/comandos');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('🗂️ Comandos disponíveis:');
+    expect(sentText).toContain('/adiar <id> <data> — Adia');
+    expect(sentText).toContain('/done <id> — Marca');
+    expect(sentText).toContain('/hoje — Resumo');
+    expect(sentText).toContain('💡 Use /<comando> desc');
+  });
+
+  it('retorna descrição de um comando existente (AC2)', async () => {
+    await webhookPost('/contatos desc');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('/contatos — Lista todos os contatos');
+  });
+
+  it('retorna erro para comando não reconhecido em desc (AC4)', async () => {
+    await webhookPost('/naoexiste desc');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('❌ Comando não reconhecido');
   });
 });
