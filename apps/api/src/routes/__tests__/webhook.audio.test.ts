@@ -8,6 +8,7 @@ vi.mock('../../lib/prisma', () => ({
     auditLog: { create: vi.fn() },
     task: { create: vi.fn() },
     userProfile: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    reminder: { create: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -22,6 +23,7 @@ vi.mock('../../lib/llmService', () => ({
   suggestAction: vi.fn(),
   normalizeAudioCommand: vi.fn((text: string) => Promise.resolve(text)),
   extractReminder: vi.fn(),
+  generateIntroduction: vi.fn(),
 }));
 
 vi.mock('../../lib/redis', () => ({
