@@ -694,8 +694,7 @@ async function handleIncomingWhatsApp(
       }
 
       case 'UNKNOWN': {
-        responseText =
-          'Não entendi. Comandos:\n/hoje — resumo\n/done <id> — pronto\n/adiar <id> tomorrow — adiar\n/semana — semana\n/email — e-mails\nmanda para <nome>: <msg>';
+        responseText = '❌ Não entendi. Use /comandos para ver a lista de comandos disponíveis.';
         break;
       }
     }
