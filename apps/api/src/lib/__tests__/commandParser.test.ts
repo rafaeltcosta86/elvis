@@ -1,47 +1,6 @@
 import { parseCommand } from '../commandParser';
 
 describe('parseCommand', () => {
-  describe('/comandos', () => {
-    it('returns LIST_COMMANDS intent for /comandos', () => {
-      expect(parseCommand('/comandos')).toEqual({ intent: 'LIST_COMMANDS' });
-    });
-
-    it('returns LIST_COMMANDS intent for /COMANDOS (case-insensitive)', () => {
-      expect(parseCommand('/COMANDOS')).toEqual({ intent: 'LIST_COMMANDS' });
-    });
-  });
-
-  describe('/<cmd> desc', () => {
-    it('returns DESCRIBE_COMMAND intent for /contatos desc', () => {
-      expect(parseCommand('/contatos desc')).toEqual({
-        intent: 'DESCRIBE_COMMAND',
-        args: { commandName: '/contatos' },
-      });
-    });
-
-    it('returns DESCRIBE_COMMAND intent for /hoje DESC (case-insensitive)', () => {
-      expect(parseCommand('/hoje DESC')).toEqual({
-        intent: 'DESCRIBE_COMMAND',
-        args: { commandName: '/hoje' },
-      });
-    });
-
-    it('detects /<cmd> desc before ALIAS_SHORTCUT', () => {
-      // If we didn't have special handling, /contatos desc would be an ALIAS_SHORTCUT
-      expect(parseCommand('/contatos desc')).toEqual({
-        intent: 'DESCRIBE_COMMAND',
-        args: { commandName: '/contatos' },
-      });
-    });
-
-    it('falls through to ALIAS_SHORTCUT if command is not in registry (per PR feedback)', () => {
-      expect(parseCommand('/unknown desc')).toEqual({
-        intent: 'ALIAS_SHORTCUT',
-        args: { alias: '/unknown', message: 'desc' },
-      });
-    });
-  });
-
   describe('/contatos', () => {
     it('returns LIST_CONTACTS intent for /contatos', () => {
       expect(parseCommand('/contatos')).toEqual({ intent: 'LIST_CONTACTS' });

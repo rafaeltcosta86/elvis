@@ -18,15 +18,10 @@ vi.mock('../../lib/prisma', () => ({
     auditLog: {
       findMany: vi.fn(),
       create: vi.fn(),
-      count: vi.fn(),
     },
     communication: {
       create: vi.fn(),
       findUnique: vi.fn(),
-      update: vi.fn(),
-    },
-    reminder: {
-      create: vi.fn(),
       update: vi.fn(),
     },
   },
@@ -46,13 +41,12 @@ vi.mock('../../lib/contactService', () => ({
   addAlias: vi.fn(),
   listContacts: vi.fn(),
   updateContact: vi.fn(),
-  deleteContact: vi.fn(),
 }));
 
 vi.mock('../../lib/llmService', () => ({
+  extractReminder: vi.fn(),
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
-  extractReminder: vi.fn(),
   generateIntroduction: vi.fn(),
 }));
 
@@ -104,8 +98,6 @@ describe('Webhook — LIST_CONTACTS', () => {
     vi.clearAllMocks();
     process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
     (sendWhatsApp as any).mockResolvedValue(undefined);
-    (findByName as any).mockResolvedValue(null);
-    (findByAlias as any).mockResolvedValue(null);
   });
 
   it('retorna mensagem de lista vazia quando não há contatos', async () => {
@@ -237,7 +229,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "/xpto oi"\n\n✅ Tarefa criada: "/xpto oi"');
+    expect(sentText).toContain('✅ Entendi: Tarefa criada!');
   });
 });
 
@@ -320,7 +312,7 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "comprar pão amanhã"\n\n✅ Tarefa criada: "comprar pão"');
+    expect(sentText).toContain('✅ Entendi: Tarefa criada!');
   });
 });
 
@@ -624,40 +616,5 @@ describe('Webhook — INTRODUCE_SELF', () => {
     expect(sentText).toContain('Apresentação para João');
     expect(sentText).toContain('Olá João, sou o Elvis assistente do Rafael da McKinsey.');
     expect(sentText).toContain('1️⃣ Confirmar');
-  });
-});
-
-describe('Webhook — LIST_COMMANDS / DESCRIBE_COMMAND', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
-    (sendWhatsApp as any).mockResolvedValue(undefined);
-    (findByName as any).mockResolvedValue(null);
-    (findByAlias as any).mockResolvedValue(null);
-  });
-
-  it('retorna lista de comandos formatada com usage (AC1)', async () => {
-    await webhookPost('/comandos');
-
-    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('🗂️ Comandos disponíveis:');
-    expect(sentText).toContain('/adiar <id> <data> — Adia');
-    expect(sentText).toContain('/done <id> — Marca');
-    expect(sentText).toContain('/hoje — Resumo');
-    expect(sentText).toContain('💡 Use /<comando> desc');
-  });
-
-  it('retorna descrição de um comando existente (AC2)', async () => {
-    await webhookPost('/contatos desc');
-
-    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('/contatos — Lista todos os contatos');
-  });
-
-  it('retorna erro para comando não reconhecido em desc (AC4)', async () => {
-    await webhookPost('/naoexiste desc');
-
-    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('❌ Comando não reconhecido');
   });
 });

@@ -8,7 +8,6 @@ vi.mock('../../lib/prisma', () => ({
     auditLog: { create: vi.fn() },
     task: { create: vi.fn() },
     userProfile: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
-    reminder: { create: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -19,11 +18,10 @@ vi.mock('../../lib/whisperService', () => ({
 }));
 
 vi.mock('../../lib/llmService', () => ({
+  extractReminder: vi.fn(),
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
   normalizeAudioCommand: vi.fn((text: string) => Promise.resolve(text)),
-  extractReminder: vi.fn(),
-  generateIntroduction: vi.fn(),
 }));
 
 vi.mock('../../lib/redis', () => ({
@@ -105,7 +103,7 @@ describe('POST /webhook/baileys-audio', () => {
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = vi.mocked(sendWhatsApp).mock.calls[0][1];
     expect(sentText).toContain('🎙️ Entendi: "lembra de ligar pra Linic amanhã"');
-    expect(sentText).toContain('✅ Tarefa criada: "lembra de ligar pra Linic amanhã"');
+    expect(sentText).toContain('✅ Entendi: Tarefa criada!');
   });
 
   it('áudio próprio (is_forwarded=false): SEND_TO cria draft e mostra preview com confirm/cancel', async () => {

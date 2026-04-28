@@ -16,8 +16,6 @@ export type Intent =
   | 'LIST_CONTACTS'
   | 'LIST_TASKS'
   | 'DELETE_CONTACT'
-  | 'LIST_COMMANDS'
-  | 'DESCRIBE_COMMAND'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -30,46 +28,11 @@ export interface ParsedCommand {
     message?: string;
     communication_id?: string;
     alias?: string;
-    commandName?: string;
   };
 }
 
-export const COMMAND_REGISTRY = [
-  { name: '/hoje', desc: 'Resumo do dia com tarefas urgentes e atrasadas' },
-  { name: '/tarefas', desc: 'Lista todas as tarefas abertas' },
-  { name: '/semana', desc: 'Relatório semanal de produtividade' },
-  { name: '/email', desc: 'Lê e-mails não lidos importantes' },
-  { name: '/contatos', desc: 'Lista todos os contatos cadastrados' },
-  { name: '/adiar', desc: 'Adia uma tarefa para outra data', usage: '/adiar <id> <data>' },
-  { name: '/done', desc: 'Marca uma tarefa como concluída', usage: '/done <id>' },
-  { name: '/mais-proativo', desc: 'Aumenta a proatividade do Elvis' },
-  { name: '/menos-proativo', desc: 'Diminui a proatividade do Elvis' },
-  { name: '/corrigir', desc: 'Reseta suas preferências aprendidas' },
-  { name: '/confirmar', desc: 'Confirma uma ação pendente', usage: '/confirmar <id>' },
-  { name: '/cancelar', desc: 'Cancela uma ação pendente', usage: '/cancelar <id>' },
-  { name: '/comandos', desc: 'Lista todos os comandos disponíveis' },
-];
-
 export function parseCommand(text: string): ParsedCommand {
   const trimmed = text.trim();
-
-  // /comandos
-  if (/^\/comandos$/i.test(trimmed)) {
-    return { intent: 'LIST_COMMANDS' };
-  }
-
-  // /<cmd> desc - AC3: Priority over ALIAS_SHORTCUT for known commands.
-  // Refined per PR feedback to check existence in COMMAND_REGISTRY.
-  const descMatch = /^(\/\S+)\s+desc$/i.exec(trimmed);
-  if (descMatch) {
-    const commandName = descMatch[1].toLowerCase();
-    if (COMMAND_REGISTRY.some((c) => c.name === commandName)) {
-      return {
-        intent: 'DESCRIBE_COMMAND',
-        args: { commandName },
-      };
-    }
-  }
 
   // /contatos
   if (/^\/contatos$/i.test(trimmed)) {
