@@ -8,6 +8,7 @@ vi.mock('../../lib/prisma', () => ({
     auditLog: { create: vi.fn() },
     task: { create: vi.fn() },
     userProfile: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    reminder: { create: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -21,6 +22,8 @@ vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
   normalizeAudioCommand: vi.fn((text: string) => Promise.resolve(text)),
+  extractReminder: vi.fn(),
+  generateIntroduction: vi.fn(),
 }));
 
 vi.mock('../../lib/redis', () => ({
@@ -29,7 +32,7 @@ vi.mock('../../lib/redis', () => ({
 
 vi.mock('../../lib/contactService', () => ({
   findByAlias: vi.fn().mockResolvedValue(null),
-  findByName: vi.fn().mockResolvedValue(null),
+  findByName: vi.fn().mockImplementation((name) => name === 'amanda' ? Promise.resolve({ id: 'c-amanda', name: 'amanda', phone: '5541999990001', aliases: [] }) : Promise.resolve(null)),
   addAlias: vi.fn(),
   createContact: vi.fn(),
 }));

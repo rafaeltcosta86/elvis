@@ -274,13 +274,13 @@ bash scripts/backup.sh && ls backups/  # → arquivo .dump de hoje
 
 > **Contexto:** Em 2026-04-09, a hipótese central do MVP foi validada: o comando `SEND_TO` existe e funciona (ex: "manda para assistente: já terminei a reunião"). No entanto, o `ai-blueprints.md` exige `approval_record_id` antes de qualquer escrita externa, e o WhatsApp envia imediatamente sem approval gate — violando a Invariante #1. M10 corrige essa lacuna trazendo WhatsApp para paridade com o fluxo de e-mail.
 
-- [ ] Quando `SEND_TO` é acionado, criar registro `Communication` (status: `AWAITING_APPROVAL`, channel: `WHATSAPP`)
-- [ ] Responder ao owner with preview: _"Vou mandar para [nome]: '[msg]'. Confirma? /confirm [id] ou /cancel [id]"_
-- [ ] Implementar intent `CONFIRM` no commandParser (ex: "/confirm 42")
-- [ ] Implementar intent `CANCEL` no commandParser (ex: "/cancel 42")
-- [ ] Só enviar a mensagem real após `/confirm` — verificar `approval_record_id` no banco
-- [ ] Atualizar `Communication.status` → `SENT` ou `CANCELLED` + entrada no `audit_log`
-- [ ] Testes: tentativa de envio sem confirmação, confirmação, cancelamento, id inválido
+- [x] Quando `SEND_TO` é acionado, criar registro `Communication` (status: `AWAITING_APPROVAL`, channel: `WHATSAPP`)
+- [x] Responder ao owner with preview: _"Vou mandar para [nome]: '[msg]'. Confirma? /confirm [id] ou /cancel [id]"_
+- [x] Implementar intent `CONFIRM` no commandParser (ex: "/confirm 42")
+- [x] Implementar intent `CANCEL` no commandParser (ex: "/cancel 42")
+- [x] Só enviar a mensagem real após `/confirm` — verificar `approval_record_id` no banco
+- [x] Atualizar `Communication.status` → `SENT` ou `CANCELLED` + entrada no `audit_log`
+- [x] Testes: tentativa de envio sem confirmação, confirmação, cancelamento, id inválido
 
 **Critérios de aceite:**
 ```bash
@@ -342,13 +342,13 @@ curl -X POST /webhook/nanoclaw -d '{"message":"/li oi"}'
 
 **Epic: Receber e processar mensagens de voz do WhatsApp**
 
-> Custo estimado: $0 no free tier do Groq (Whisper Large v3) para até 100 msg/dia com 50% voz.
+> Custo estimado: -bash no free tier do Groq (Whisper Large v3) para até 100 msg/dia com 50% voz.
 
 - [x] Receber payload de áudio OGG do webhook NanoClaw/Baileys
 - [x] Transcrever via Groq Whisper (`whisper-large-v3`, free tier)
 - [x] Corrigir transcrição de nomes próprios via parâmetro `prompt` (ex: "Claude Code", "Anthropic")
-- [ ] Passar transcrição ao `handleIncomingWhatsApp` como texto normal
-- [ ] Testar com mensagens de voz reais no WhatsApp
+- [x] Passar transcrição ao `handleIncomingWhatsApp` como texto normal
+- [x] Testar com mensagens de voz reais no WhatsApp
 
 ---
 
@@ -359,7 +359,7 @@ curl -X POST /webhook/nanoclaw -d '{"message":"/li oi"}'
 2. Critérios de aceite executados com sucesso
 3. Sem erros em `pnpm lint` e `pnpm build`
 4. Entrada adicionada no Log
-- [ ] Novos comportamentos têm teste automatizado (unit ou integration)
+- [x] Novos comportamentos têm teste automatizado (unit ou integration)
 
 ### Como testar
 
@@ -422,6 +422,7 @@ pnpm lint && pnpm build
 | 2026-03-19 | Bloco 20 [COWORK] concluído: outlookMailClient.ts (listTodayEmails + sendEmail via Graph) — 62 testes |
 | 2026-03-19 | Bloco 21 [COWORK] concluído: gmailClient.ts (createGmailClient + listTodayEmails + sendEmail) + gmail-oauth-bootstrap.ts — 72 testes |
 | 2026-03-19 | Bloco 22 [COWORK] concluído: emailService.ts + routes/email.ts (summary, draft, send + AuditLog) + montagem em index.ts — 100 testes |
+| 2026-03-19 | Bloco 22 [COWORK] concluído: emailService.ts + routes/email.ts (summary, draft, send + AuditLog) + montagem em index.ts — 100 testes |
 | 2026-03-19 | Bloco 23 [COWORK] concluído: EMAIL intent no webhook.ts conectado a getEmailSummary() — **104 testes passando, M7 completo** ✅ |
 | 2026-03-20 | Bloco 24 [TRAD] concluído: decisões M8 registradas em DECISIONS.md (sinais, inferência, confidence, proactivity, email adiado) |
 | 2026-03-20 | Bloco 25 [COWORK] concluído: lib/userModel.ts (inferPreferences, computeConfidence, getOrCreateProfile, updateInferredPrefs) + 19 testes |
@@ -447,3 +448,4 @@ pnpm lint && pnpm build
 | 2026-04-26 | UX [COWORK] concluído: Melhoria na confirmação de criação de tarefa (removido ID e hint, exibição do título). |
 | 2026-04-26 | Fix [COWORK] concluído: Implementada camada de correção fonética pós-Whisper para nomes próprios ambíguos (ex: Cloud Code -> Claude Code) — **309 testes passando** ✅ |
 | 2026-04-28 | Feat [COWORK] concluído: Adicionados comandos `/comandos` (lista) e `/<cmd> desc` (ajuda detalhada) com registro centralizado — **263 testes passando** ✅ |
+| 2026-05-15 | Reminders [COWORK] concluído: Implementação de lembretes automáticos na criação de tarefas, job de disparo e snooze (1h, 4h, amanhã) — **M12 completo** ✅ |

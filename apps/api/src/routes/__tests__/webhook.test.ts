@@ -18,10 +18,15 @@ vi.mock('../../lib/prisma', () => ({
     auditLog: {
       findMany: vi.fn(),
       create: vi.fn(),
+      count: vi.fn(),
     },
     communication: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    reminder: {
+      create: vi.fn(),
       update: vi.fn(),
     },
   },
@@ -37,15 +42,17 @@ vi.mock('../../lib/emailService', () => ({
 
 vi.mock('../../lib/contactService', () => ({
   findByAlias: vi.fn(),
-  findByName: vi.fn().mockResolvedValue(null),
+  findByName: vi.fn().mockImplementation((name) => name === 'assistente' ? Promise.resolve({ id: 'c-ast', name: 'assistente', phone: '5511988880000', aliases: [] }) : Promise.resolve(null)),
   addAlias: vi.fn(),
   listContacts: vi.fn(),
   updateContact: vi.fn(),
+  deleteContact: vi.fn(),
 }));
 
 vi.mock('../../lib/llmService', () => ({
   classifyIntent: vi.fn(),
   suggestAction: vi.fn(),
+  extractReminder: vi.fn(),
   generateIntroduction: vi.fn(),
 }));
 

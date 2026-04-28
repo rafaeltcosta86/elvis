@@ -26,6 +26,7 @@ enum ReminderStatus {
   SENT
   ACKNOWLEDGED
   EXPIRED
+  FIRED
 }
 
 enum CommunicationProvider {
