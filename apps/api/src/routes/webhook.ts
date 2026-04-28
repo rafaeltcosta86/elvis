@@ -701,7 +701,10 @@ async function processWebhook(
     if (!sender_id || !message_text) return res.json({ ok: true });
 
     const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    await sendWhatsApp(sender_id, responseText);
+    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
+      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
+      : responseText;
+    await sendWhatsApp(sender_id, finalResponse);
     res.json({ ok: true });
   } catch (err) {
     console.error(`Webhook ${provider} error:`, sanitizeError(err));
