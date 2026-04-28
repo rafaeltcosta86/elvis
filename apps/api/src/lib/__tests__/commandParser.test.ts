@@ -34,10 +34,10 @@ describe('parseCommand', () => {
       });
     });
 
-    it('falls through to ALIAS_SHORTCUT if command is not in registry', () => {
+    it('returns DESCRIBE_COMMAND intent even if command is not in registry (handled by webhook)', () => {
       expect(parseCommand('/unknown desc')).toEqual({
-        intent: 'ALIAS_SHORTCUT',
-        args: { alias: '/unknown', message: 'desc' },
+        intent: 'DESCRIBE_COMMAND',
+        args: { commandName: '/unknown' },
       });
     });
   });
