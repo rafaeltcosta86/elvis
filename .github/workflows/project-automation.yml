@@ -7,9 +7,6 @@ on:
     types: [submitted]
   issues:
     types: [labeled]
-  workflow_run:
-    workflows: ["QA Agent"]
-    types: [completed]
 
 env:
   PROJECT_ID: PVT_kwHODpFFL84BUuhX
@@ -98,7 +95,7 @@ jobs:
             console.log(`Issue #${context.payload.issue.number} movida para ${label}`);
 
   move-card-on-pr-open:
-    name: PR aberto → 🧪 Testes (move issue linkada)
+    name: PR aberto → Code Review (move issue linkada)
     if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')
     runs-on: ubuntu-latest
     steps:
@@ -141,14 +138,14 @@ jobs:
                 projectId: process.env.PROJECT_ID,
                 itemId,
                 fieldId: process.env.STATUS_FIELD_ID,
-                value: { singleSelectOptionId: process.env.STATUS_TESTES }
+                value: { singleSelectOptionId: process.env.STATUS_CODE_REVIEW }
               });
             };
 
             // Sempre tentar mover o PR (caso esteja no board sem issue linkada)
             if (linkedIssues.length === 0) {
               await moveItem(pr.node_id).catch(() => {});
-              console.log(`PR #${prNumber} adicionado ao board em 🧪 Testes`);
+              console.log(`PR #${prNumber} adicionado ao board em Code Review`);
             }
 
             // Mover issues linkadas (independentemente de o PR estar no board)
@@ -169,8 +166,7 @@ jobs:
     if: >
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.name == 'QA Agent' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'pull_request'
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Mover issue para 👁 Code Review e adicionar stage:revisao
@@ -178,7 +174,14 @@ jobs:
         with:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
-            const prNumber = context.payload.workflow_run.pull_requests[0]?.number;
+            let prNumber = context.payload.workflow_run.pull_requests?.[0]?.number;
+            if (!prNumber) {
+              const sha = context.payload.workflow_run.head_sha;
+              const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner, repo: context.repo.repo, commit_sha: sha
+              });
+              prNumber = prs.data[0]?.number;
+            }
             if (!prNumber) { console.log('Sem PR associado.'); return; }
             const repoOwner = context.repo.owner;
             const repoName = context.repo.repo;
@@ -233,6 +236,7 @@ jobs:
               }
             }
 
+            // Adicionar label stage:revisao
             await github.rest.issues.addLabels({
               owner: repoOwner, repo: repoName, issue_number: prNumber,
               labels: ['stage:revisao']

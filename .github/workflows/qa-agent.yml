@@ -18,7 +18,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Criar label qa:needs-work se não existir
+      - name: Criar labels QA se não existirem
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: |
@@ -27,14 +27,21 @@ jobs:
             --description "QA Agent: ACs sem cobertura" \
             --repo ${{ github.repository }} \
             --force
+          gh label create "qa:approved" \
+            --color "16A34A" \
+            --description "QA Agent: todos os ACs cobertos" \
+            --repo ${{ github.repository }} \
+            --force
 
       - name: Extrair PR e issue linkada
         id: context
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: |
-          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
           REPO="${{ github.repository }}"
+          SHA="${{ github.event.workflow_run.head_sha }}"
+
+          PR_NUMBER=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty' 2>/dev/null)
 
           if [ -z "$PR_NUMBER" ]; then
             echo "Sem PR associado ao workflow_run. Pulando."
@@ -122,28 +129,23 @@ jobs:
           QA_RESULT=$(echo "$RESULT" | jq -r '.result // "needs-work"')
 
           if [ "$QA_RESULT" = "approved" ]; then
-            HEADER="✅ **QA Agent — Aprovado** — todos os ACs cobertos"
-          else
-            HEADER="❌ **QA Agent — Necessita correção** — ACs sem cobertura"
-          fi
-
-          COMMENT=$(echo "$RESULT" | jq -r --arg h "$HEADER" --arg issue "$ISSUE_NUMBER" '
-            $h + "\n\n" +
-            (.acs | map(
-              (if .covered then "- ✅ " else "- ❌ " end) + .text + "\n  > " + .reason
-            ) | join("\n")) +
-            "\n\n**Resumo:** " + .summary +
-            "\n\n---\n*QA Agent — verificação automática de ACs com execução real de testes. Issue: #" + $issue + "*"
-          ' 2>/dev/null || printf '%s\n\n**Resumo:** Erro ao formatar relatório.\n' "$HEADER")
-
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT"
-
-          if [ "$QA_RESULT" = "approved" ]; then
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "qa:approved" 2>/dev/null || true
             gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "qa:needs-work" 2>/dev/null || true
             echo "QA aprovado. Todos os ACs cobertos por testes reais."
             exit 0
           else
+            HEADER="❌ **QA Agent — Necessita correção** — ACs sem cobertura"
+            COMMENT=$(echo "$RESULT" | jq -r --arg h "$HEADER" --arg issue "$ISSUE_NUMBER" '
+              $h + "\n\n" +
+              (.acs | map(
+                (if .covered then "- ✅ " else "- ❌ " end) + .text + "\n  > " + .reason
+              ) | join("\n")) +
+              "\n\n**Resumo:** " + .summary +
+              "\n\n---\n*QA Agent — verificação automática de ACs. Issue: #" + $issue + "*"
+            ' 2>/dev/null || printf '%s\n\n**Resumo:** Erro ao formatar relatório.\n' "$HEADER")
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT"
             gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "qa:needs-work" 2>/dev/null || true
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "qa:approved" 2>/dev/null || true
             echo "QA reprovado. ACs sem cobertura identificados."
             exit 1
           fi
