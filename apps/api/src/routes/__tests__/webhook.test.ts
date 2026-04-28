@@ -97,6 +97,8 @@ describe('Webhook — LIST_CONTACTS', () => {
     vi.clearAllMocks();
     process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
     (sendWhatsApp as any).mockResolvedValue(undefined);
+    (findByName as any).mockResolvedValue(null);
+    (findByAlias as any).mockResolvedValue(null);
   });
 
   it('retorna mensagem de lista vazia quando não há contatos', async () => {
@@ -611,5 +613,40 @@ describe('Webhook — INTRODUCE_SELF', () => {
     expect(sentText).toContain('Apresentação para João');
     expect(sentText).toContain('Olá João, sou o Elvis assistente do Rafael da McKinsey.');
     expect(sentText).toContain('1️⃣ Confirmar');
+  });
+});
+
+describe('Webhook — LIST_COMMANDS / DESCRIBE_COMMAND', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    (sendWhatsApp as any).mockResolvedValue(undefined);
+    (findByName as any).mockResolvedValue(null);
+    (findByAlias as any).mockResolvedValue(null);
+  });
+
+  it('retorna lista de comandos formatada com usage (AC1)', async () => {
+    await webhookPost('/comandos');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('🗂️ Comandos disponíveis:');
+    expect(sentText).toContain('/adiar <id> <data> — Adia');
+    expect(sentText).toContain('/done <id> — Marca');
+    expect(sentText).toContain('/hoje — Resumo');
+    expect(sentText).toContain('💡 Use /<comando> desc');
+  });
+
+  it('retorna descrição de um comando existente (AC2)', async () => {
+    await webhookPost('/contatos desc');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('/contatos — Lista todos os contatos');
+  });
+
+  it('retorna erro para comando não reconhecido em desc (AC4)', async () => {
+    await webhookPost('/naoexiste desc');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toContain('❌ Comando não reconhecido');
   });
 });

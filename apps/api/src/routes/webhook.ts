@@ -364,11 +364,15 @@ async function handleIncomingWhatsApp(
           'whatsapp.draft.alias'
         );
         if (responseText.includes('não encontrado')) {
-          // Alias not registered — fallback to CREATE_TASK logic
-          const newTask = await prisma.task.create({
-            data: { title: message_text, category: 'outros' },
-          });
-          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          if (args?.message?.toLowerCase() === 'desc') {
+            responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
+          } else {
+            // Alias not registered — fallback to CREATE_TASK logic
+            const newTask = await prisma.task.create({
+              data: { title: message_text, category: 'outros' },
+            });
+            responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          }
         }
         break;
       }
