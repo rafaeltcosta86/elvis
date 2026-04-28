@@ -16,6 +16,8 @@ export type Intent =
   | 'LIST_CONTACTS'
   | 'LIST_TASKS'
   | 'DELETE_CONTACT'
+  | 'LIST_COMMANDS'
+  | 'DESCRIBE_COMMAND'
   | 'UNKNOWN';
 
 export interface ParsedCommand {
@@ -28,11 +30,39 @@ export interface ParsedCommand {
     message?: string;
     communication_id?: string;
     alias?: string;
+    commandName?: string;
   };
 }
 
+export const COMMAND_REGISTRY = [
+  { name: '/hoje', desc: 'Resumo do dia com tarefas urgentes e atrasadas' },
+  { name: '/tarefas', desc: 'Lista todas as tarefas abertas' },
+  { name: '/semana', desc: 'Relatório semanal de produtividade' },
+  { name: '/email', desc: 'Lê e-mails não lidos importantes' },
+  { name: '/contatos', desc: 'Lista todos os contatos cadastrados' },
+  { name: '/adiar', desc: 'Adia uma tarefa para outra data', usage: '/adiar <id> <data>' },
+  { name: '/done', desc: 'Marca uma tarefa como concluída', usage: '/done <id>' },
+  { name: '/mais-proativo', desc: 'Aumenta a proatividade do Elvis' },
+  { name: '/menos-proativo', desc: 'Diminui a proatividade do Elvis' },
+  { name: '/comandos', desc: 'Lista todos os comandos disponíveis' },
+];
+
 export function parseCommand(text: string): ParsedCommand {
   const trimmed = text.trim();
+
+  // /comandos
+  if (/^\/comandos$/i.test(trimmed)) {
+    return { intent: 'LIST_COMMANDS' };
+  }
+
+  // /<cmd> desc
+  const descMatch = /^(\/\S+)\s+desc$/i.exec(trimmed);
+  if (descMatch) {
+    return {
+      intent: 'DESCRIBE_COMMAND',
+      args: { commandName: descMatch[1].toLowerCase() },
+    };
+  }
 
   // /contatos
   if (/^\/contatos$/i.test(trimmed)) {

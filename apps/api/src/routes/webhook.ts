@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { type Task } from '@prisma/client';
-import { parseCommand } from '../lib/commandParser';
+import { parseCommand, COMMAND_REGISTRY } from '../lib/commandParser';
 import { sendWhatsApp } from '../lib/nanoclawClient';
 import prisma from '../lib/prisma';
 import { addDays, nextMonday, nextDay, format, parseISO, setHours, setMinutes } from 'date-fns';
@@ -197,6 +197,22 @@ async function handleIncomingWhatsApp(
   let responseText = '';
 
   switch (intent) {
+      case 'LIST_COMMANDS': {
+        const list = COMMAND_REGISTRY.map((c) => `${c.name} — ${c.desc}`).join('\n');
+        responseText = `🗂️ Comandos disponíveis:\n\n${list}\n\n💡 Use /<comando> desc para saber mais sobre qualquer comando.`;
+        break;
+      }
+
+      case 'DESCRIBE_COMMAND': {
+        const cmd = COMMAND_REGISTRY.find((c) => c.name === args?.commandName);
+        if (cmd) {
+          responseText = `${cmd.name} — ${cmd.desc}${cmd.usage ? `\nUso: ${cmd.usage}` : ''}`;
+        } else {
+          responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
+        }
+        break;
+      }
+
       case 'LIST_CONTACTS': {
         const contacts = await listContacts();
         if (contacts.length === 0) {
