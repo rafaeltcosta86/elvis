@@ -39,7 +39,7 @@ export const COMMAND_REGISTRY = [
   { name: '/tarefas', desc: 'Lista todas as tarefas abertas' },
   { name: '/semana', desc: 'Relatório semanal de produtividade' },
   { name: '/email', desc: 'Lê e-mails não lidos importantes' },
-  { name: '/contatos', desc: 'Lista todos os contatos cadastrados' },
+  { name: '/contatos', desc: 'Lista todos os contatos cadastrados no Elvis com nome e alias.' },
   { name: '/adiar', desc: 'Adia uma tarefa para outra data', usage: '/adiar <id> <data>' },
   { name: '/done', desc: 'Marca uma tarefa como concluída', usage: '/done <id>' },
   { name: '/mais-proativo', desc: 'Aumenta a proatividade do Elvis' },
@@ -59,6 +59,7 @@ export function parseCommand(text: string): ParsedCommand {
   }
 
   // /<cmd> desc - AC3: Priority over ALIAS_SHORTCUT for known commands.
+  // Refined per PR feedback to check existence in COMMAND_REGISTRY.
   const descMatch = /^(\/\S+)\s+desc$/i.exec(trimmed);
   if (descMatch) {
     const commandName = descMatch[1].toLowerCase();
