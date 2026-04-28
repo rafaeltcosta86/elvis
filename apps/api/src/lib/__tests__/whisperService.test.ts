@@ -94,4 +94,37 @@ describe('transcribeAudio', () => {
 
     delete process.env.WHISPER_PROMPT;
   });
+
+  it('corrige "Cloud Code" para "Claude Code" (case insensitive)', async () => {
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'Eu usei o Cloud Code hoje' },
+    });
+    let result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('Eu usei o Claude Code hoje');
+
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'o cloud code é legal' },
+    });
+    result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('o Claude Code é legal');
+  });
+
+  it('não altera "Cloud" sozinho ou em contextos diferentes', async () => {
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'A Cloud da Amazon' },
+    });
+    const result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('A Cloud da Amazon');
+  });
+
+  it('usa WHISPER_CORRECTIONS da variável de ambiente', async () => {
+    process.env.WHISPER_CORRECTIONS = JSON.stringify({ 'Linic': 'Lynne' });
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'Oi Linic' },
+    });
+    const result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('Oi Lynne');
+
+    delete process.env.WHISPER_CORRECTIONS;
+  });
 });
