@@ -30,7 +30,7 @@ vi.mock('../../lib/redis', () => ({
 
 vi.mock('../../lib/contactService', () => ({
   findByAlias: vi.fn().mockResolvedValue(null),
-  findByName: vi.fn().mockResolvedValue(null),
+  findByName: vi.fn().mockImplementation((name) => name === 'amanda' ? Promise.resolve({ id: 'c-amanda', name: 'amanda', phone: '5541999990001', aliases: [] }) : Promise.resolve(null)),
   addAlias: vi.fn(),
   createContact: vi.fn(),
 }));

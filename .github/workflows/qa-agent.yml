@@ -1,0 +1,149 @@
+name: QA Agent
+
+on:
+  workflow_run:
+    workflows: ["Elvis Sentinel"]
+    types: [completed]
+
+jobs:
+  qa-review:
+    name: QA — Verificar cobertura de ACs
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+      contents: read
+
+    steps:
+      - name: Criar label qa:needs-work se não existir
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: |
+          gh label create "qa:needs-work" \
+            --color "E11D48" \
+            --description "QA Agent: ACs sem cobertura" \
+            --repo ${{ github.repository }} \
+            --force
+
+      - name: Extrair PR e issue linkada
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+          REPO="${{ github.repository }}"
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Sem PR associado ao workflow_run. Pulando."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          PR_BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq '.body')
+          ISSUE_NUMBER=$(echo "$PR_BODY" | grep -oP '(?:Closes?|Fixes?|Resolves?)\s+#\K\d+' | head -1)
+
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "Nenhuma issue linkada encontrada no PR. Pulando QA."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+          echo "repo=$REPO" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: Checkout do código do PR
+        if: steps.context.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        if: steps.context.outputs.skip == 'false'
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Instalar dependências
+        if: steps.context.outputs.skip == 'false'
+        run: pnpm install --frozen-lockfile
+
+      - name: Rodar testes e verificar ACs com Gemini
+        if: steps.context.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
+          REPO: ${{ steps.context.outputs.repo }}
+          CI: "true"
+        run: |
+          echo "Verificando ACs da issue #${ISSUE_NUMBER} para o PR #${PR_NUMBER}..."
+
+          ISSUE_BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body --jq '.body')
+
+          # Rodar testes com reporter verbose para capturar nomes descritivos
+          TEST_OUTPUT=$(pnpm --filter api exec vitest run --reporter=verbose 2>&1 || true)
+          echo "--- Output dos testes ---"
+          echo "$TEST_OUTPUT" | tail -50
+          echo "-------------------------"
+
+          PROMPT="Você é um QA Engineer. Sua tarefa: verificar se cada Acceptance Criteria da issue está coberto por um teste que passou.
+
+          ## Issue #${ISSUE_NUMBER} — Acceptance Criteria:
+          ${ISSUE_BODY}
+
+          ## Output dos testes (vitest --reporter=verbose):
+          ${TEST_OUTPUT}
+
+          Para cada AC (linhas que começam com \"- [ ]\" ou \"- [x]\"), identifique:
+          1. Há um teste que passou e que cobre este comportamento?
+          2. O nome/descrição do teste confirma a cobertura?
+
+          Responda SOMENTE em JSON válido sem markdown:
+          {\"result\":\"approved\"|\"needs-work\",\"acs\":[{\"text\":\"...\",\"covered\":true|false,\"reason\":\"nome do teste ou motivo da ausência\"}],\"summary\":\"...\"}"
+
+          RESPONSE=$(curl -s \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg prompt "$PROMPT" '{contents:[{parts:[{text:$prompt}]}]}')")
+
+          RESULT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+
+          if [ -z "$RESULT" ]; then
+            echo "Erro ao chamar Gemini API. Resposta: $RESPONSE"
+            RESULT='{"result":"needs-work","acs":[],"summary":"Erro ao chamar Gemini API — verifique o secret GEMINI_API_KEY."}'
+          fi
+
+          QA_RESULT=$(echo "$RESULT" | jq -r '.result // "needs-work"')
+
+          if [ "$QA_RESULT" = "approved" ]; then
+            HEADER="✅ **QA Agent — Aprovado** — todos os ACs cobertos"
+          else
+            HEADER="❌ **QA Agent — Necessita correção** — ACs sem cobertura"
+          fi
+
+          COMMENT=$(echo "$RESULT" | jq -r --arg h "$HEADER" --arg issue "$ISSUE_NUMBER" '
+            $h + "\n\n" +
+            (.acs | map(
+              (if .covered then "- ✅ " else "- ❌ " end) + .text + "\n  > " + .reason
+            ) | join("\n")) +
+            "\n\n**Resumo:** " + .summary +
+            "\n\n---\n*QA Agent — verificação automática de ACs com execução real de testes. Issue: #" + $issue + "*"
+          ' 2>/dev/null || printf '%s\n\n**Resumo:** Erro ao formatar relatório.\n' "$HEADER")
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT"
+
+          if [ "$QA_RESULT" = "approved" ]; then
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "qa:needs-work" 2>/dev/null || true
+            echo "QA aprovado. Todos os ACs cobertos por testes reais."
+            exit 0
+          else
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "qa:needs-work" 2>/dev/null || true
+            echo "QA reprovado. ACs sem cobertura identificados."
+            exit 1
+          fi

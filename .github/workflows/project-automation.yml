@@ -7,6 +7,9 @@ on:
     types: [submitted]
   issues:
     types: [labeled]
+  workflow_run:
+    workflows: ["QA Agent"]
+    types: [completed]
 
 env:
   PROJECT_ID: PVT_kwHODpFFL84BUuhX
@@ -25,7 +28,7 @@ env:
 jobs:
   move-violation-to-board:
     name: Violação detectada → 💡 Ideia
-    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'stage:architecture-violation'
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'architecture-violation'
     runs-on: ubuntu-latest
     steps:
       - name: Adicionar issue ao board na coluna Ideia
@@ -95,7 +98,7 @@ jobs:
             console.log(`Issue #${context.payload.issue.number} movida para ${label}`);
 
   move-card-on-pr-open:
-    name: PR aberto → Code Review (move issue linkada)
+    name: PR aberto → 🧪 Testes (move issue linkada)
     if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')
     runs-on: ubuntu-latest
     steps:
@@ -138,26 +141,98 @@ jobs:
                 projectId: process.env.PROJECT_ID,
                 itemId,
                 fieldId: process.env.STATUS_FIELD_ID,
-                value: { singleSelectOptionId: process.env.STATUS_CODE_REVIEW }
+                value: { singleSelectOptionId: process.env.STATUS_TESTES }
               });
             };
 
-            if (linkedIssues.length > 0) {
-              // Mover as issues linkadas
-              for (const issueNumber of linkedIssues) {
+            // Sempre tentar mover o PR (caso esteja no board sem issue linkada)
+            if (linkedIssues.length === 0) {
+              await moveItem(pr.node_id).catch(() => {});
+              console.log(`PR #${prNumber} adicionado ao board em 🧪 Testes`);
+            }
+
+            // Mover issues linkadas (independentemente de o PR estar no board)
+            for (const issueNumber of linkedIssues) {
+              try {
                 const { data: issue } = await github.rest.issues.get({
                   owner: repoOwner, repo: repoName, issue_number: issueNumber
                 });
                 await moveItem(issue.node_id);
-                console.log(`Issue #${issueNumber} movida para Code Review`);
+                console.log(`Issue #${issueNumber} movida para 🧪 Testes`);
+              } catch (e) {
+                console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
-            } else {
-              // Sem issue linkada: adiciona o próprio PR ao board
-              await moveItem(pr.node_id);
-              console.log(`PR #${prNumber} adicionado ao board em Code Review`);
             }
 
-            // Adicionar label stage:revisao
+  move-card-on-qa-pass:
+    name: QA passou → 👁 Code Review
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'QA Agent' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mover issue para 👁 Code Review e adicionar stage:revisao
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const prNumber = context.payload.workflow_run.pull_requests[0]?.number;
+            if (!prNumber) { console.log('Sem PR associado.'); return; }
+            const repoOwner = context.repo.owner;
+            const repoName = context.repo.repo;
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: repoOwner, repo: repoName, pull_number: prNumber
+            });
+
+            const body = pr.body ?? '';
+            const linkedIssues = [...body.matchAll(/(?:Closes?|Fixes?|Resolves?)\s+#(\d+)/gi)]
+              .map(m => parseInt(m[1]));
+
+            const moveItem = async (nodeId) => {
+              const addResult = await github.graphql(`
+                mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                    item { id }
+                  }
+                }
+              `, { projectId: process.env.PROJECT_ID, contentId: nodeId });
+
+              const itemId = addResult.addProjectV2ItemById.item.id;
+
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
+                  }) { projectV2Item { id } }
+                }
+              `, {
+                projectId: process.env.PROJECT_ID,
+                itemId,
+                fieldId: process.env.STATUS_FIELD_ID,
+                value: { singleSelectOptionId: process.env.STATUS_CODE_REVIEW }
+              });
+            };
+
+            if (linkedIssues.length === 0) {
+              await moveItem(pr.node_id).catch(() => {});
+              console.log(`PR #${prNumber} movido para 👁 Code Review após QA passar`);
+            }
+
+            for (const issueNumber of linkedIssues) {
+              try {
+                const { data: issue } = await github.rest.issues.get({
+                  owner: repoOwner, repo: repoName, issue_number: issueNumber
+                });
+                await moveItem(issue.node_id);
+                console.log(`Issue #${issueNumber} movida para 👁 Code Review após QA passar`);
+              } catch (e) {
+                console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
+              }
+            }
+
             await github.rest.issues.addLabels({
               owner: repoOwner, repo: repoName, issue_number: prNumber,
               labels: ['stage:revisao']
@@ -210,15 +285,21 @@ jobs:
               });
             };
 
-            if (linkedIssues.length > 0) {
-              for (const issueNumber of linkedIssues) {
+            // Sempre tentar mover o PR (caso esteja no board sem issue linkada)
+            if (linkedIssues.length === 0) {
+              await moveItemToStatus(pr.node_id, process.env.STATUS_PULL_REQUEST).catch(() => {});
+            }
+
+            // Mover issues linkadas (independentemente de o PR estar no board)
+            for (const issueNumber of linkedIssues) {
+              try {
                 const { data: issue } = await github.rest.issues.get({
                   owner: repoOwner, repo: repoName, issue_number: issueNumber
                 });
                 await moveItemToStatus(issue.node_id, process.env.STATUS_PULL_REQUEST);
+              } catch (e) {
+                console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
-            } else {
-              await moveItemToStatus(pr.node_id, process.env.STATUS_PULL_REQUEST);
             }
 
             // Atualizar labels
@@ -278,14 +359,18 @@ jobs:
               });
             };
 
-            if (linkedIssues.length > 0) {
-              for (const issueNumber of linkedIssues) {
+            // Sempre mover o PR (caso esteja no board sem issue linkada)
+            await moveToProducao(pr.node_id).catch(() => {});
+
+            // Mover issues linkadas (independentemente de o PR estar no board)
+            for (const issueNumber of linkedIssues) {
+              try {
                 const { data: issue } = await github.rest.issues.get({
                   owner: repoOwner, repo: repoName, issue_number: issueNumber
                 });
                 await moveToProducao(issue.node_id);
                 console.log(`Issue #${issueNumber} movida para Produção`);
+              } catch (e) {
+                console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
-            } else {
-              await moveToProducao(pr.node_id);
             }

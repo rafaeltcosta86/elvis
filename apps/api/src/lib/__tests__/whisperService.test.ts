@@ -69,4 +69,62 @@ describe('transcribeAudio', () => {
       })
     );
   });
+
+  it('passa parâmetro prompt no FormData', async () => {
+    (mockedAxios.post as any).mockResolvedValueOnce({ data: { text: 'ok' } });
+    await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+
+    const formData = (mockedAxios.post as any).mock.calls[0][1] as any;
+    // FormData do pacote 'form-data' usa internal _streams
+    const promptPart = formData._streams.find((s: any) => typeof s === 'string' && s.includes('name="prompt"'));
+    expect(promptPart).toBeDefined();
+
+    const promptValue = formData._streams[formData._streams.indexOf(promptPart) + 1];
+    expect(promptValue).toBe('Claude Code, Anthropic, Elvis, Rafael');
+  });
+
+  it('usa WHISPER_PROMPT da variável de ambiente se presente', async () => {
+    process.env.WHISPER_PROMPT = 'Custom Prompt, Test';
+    (mockedAxios.post as any).mockResolvedValueOnce({ data: { text: 'ok' } });
+    await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+
+    const formData = (mockedAxios.post as any).mock.calls[0][1] as any;
+    const promptValue = formData._streams[formData._streams.findIndex((s: any) => typeof s === 'string' && s.includes('name="prompt"')) + 1];
+    expect(promptValue).toBe('Custom Prompt, Test');
+
+    delete process.env.WHISPER_PROMPT;
+  });
+
+  it('corrige "Cloud Code" para "Claude Code" (case insensitive)', async () => {
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'Eu usei o Cloud Code hoje' },
+    });
+    let result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('Eu usei o Claude Code hoje');
+
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'o cloud code é legal' },
+    });
+    result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('o Claude Code é legal');
+  });
+
+  it('não altera "Cloud" sozinho ou em contextos diferentes', async () => {
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'A Cloud da Amazon' },
+    });
+    const result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('A Cloud da Amazon');
+  });
+
+  it('usa WHISPER_CORRECTIONS da variável de ambiente', async () => {
+    process.env.WHISPER_CORRECTIONS = JSON.stringify({ 'Linic': 'Lynne' });
+    (mockedAxios.post as any).mockResolvedValueOnce({
+      data: { text: 'Oi Linic' },
+    });
+    const result = await transcribeAudio(Buffer.from('audio'), 'audio/ogg');
+    expect(result).toBe('Oi Lynne');
+
+    delete process.env.WHISPER_CORRECTIONS;
+  });
 });
