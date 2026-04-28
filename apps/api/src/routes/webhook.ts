@@ -364,6 +364,12 @@ async function handleIncomingWhatsApp(
           'whatsapp.draft.alias'
         );
         if (responseText.includes('não encontrado')) {
+          // AC4: If message is "desc" and alias not found, it's likely an unknown command help request
+          if (args?.message?.toLowerCase() === 'desc') {
+            responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
+            break;
+          }
+
           // Alias not registered — fallback to CREATE_TASK logic
           const newTask = await prisma.task.create({
             data: { title: message_text, category: 'outros' },
