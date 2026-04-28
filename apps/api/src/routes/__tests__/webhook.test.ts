@@ -77,7 +77,7 @@ import {
   updateContact,
 } from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
-import { classifyIntent } from '../../lib/llmService';
+import { classifyIntent, generateIntroduction } from '../../lib/llmService';
 
 const app = express();
 app.use(express.json());

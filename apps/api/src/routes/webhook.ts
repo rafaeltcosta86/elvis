@@ -109,12 +109,30 @@ function deleteContactPreview(name: string, alias: string, phone: string): strin
   return `🗑️ Confirmar deleção?\n\nNome: ${name}\nAlias: ${alias}\nTelefone: ${phone}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
 }
 
+// Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
+function parseContacts(raw: string): Array<{ name: string; phone: string }> {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [name, phone] = entry.split(':');
+      return { name: (name ?? '').trim(), phone: (phone ?? '').trim() };
+    })
+    .filter((c) => c.name && c.phone);
+}
+
 // Helper para centralizar lógica de envio de mensagem (dry-run/draft)
 async function processSendMessage(sender_id: string, contactIdentifier: string, message: string, auditAction = 'whatsapp.draft') {
-  const contact = (await findByName(contactIdentifier)) || (await findByAlias(contactIdentifier));
+  const dbContact = (await findByName(contactIdentifier)) || (await findByAlias(contactIdentifier));
+  const envContacts = parseContacts(process.env.WHATSAPP_CONTACTS ?? '');
+  const envContact = envContacts.find(
+    (c) => c.name.toLowerCase() === contactIdentifier.toLowerCase()
+  );
+  const contact = dbContact ?? (envContact ? { name: envContact.name, phone: envContact.phone } : null);
 
   if (!contact) {
-    return `❌ "${contactIdentifier}" não encontrado. Cadastre com /criar-contato.`;
+    return `❌ "${contactIdentifier}" não encontrado. Cadastre com /criar-contato ou adicione em WHATSAPP_CONTACTS=nome:numero`;
   }
 
   const comm = await prisma.communication.create({
@@ -390,29 +408,7 @@ async function handleIncomingWhatsApp(
             data: { title: message_text, category: 'outros' },
           });
           responseText = `✅ Tarefa criada: "${newTask.title}"`;
-
         }
-        const comm = await prisma.communication.create({
-          data: {
-            provider: 'WHATSAPP',
-            type: 'DRAFT',
-            to: contact.phone,
-            body: args?.message ?? '',
-            status: 'AWAITING_APPROVAL',
-            metadata: { contactName: contact.name, sender_id },
-          },
-        });
-        await prisma.auditLog.create({
-          data: {
-            actor: 'user',
-            action: 'whatsapp.draft',
-            entity_type: 'Communication',
-            entity_id: comm.id,
-            summary: `Draft WhatsApp para ${contact.name} (${contact.phone}) via atalho ${args?.alias}`,
-          },
-        });
-        await savePending(sender_id, comm.id);
-        responseText = draftPreview(contact.name, args?.message ?? '');
         break;
       }
 
