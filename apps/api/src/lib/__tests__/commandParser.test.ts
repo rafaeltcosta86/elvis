@@ -137,7 +137,7 @@ describe('parseCommand', () => {
     });
   });
 
-  describe('UNKNOWN', () => {
+  describe('UNKNOWN (natural language fallback)', () => {
     it('returns UNKNOWN intent with rawText for plain text', () => {
       expect(parseCommand('comprar leite')).toEqual({
         intent: 'UNKNOWN',
