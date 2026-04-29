@@ -77,7 +77,7 @@ import {
   updateContact,
 } from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
-import { classifyIntent, generateIntroduction } from '../../lib/llmService';
+import { classifyIntent, generateIntroduction, extractReminder } from '../../lib/llmService';
 import { TASK_CREATED_MESSAGE } from '../../lib/constants';
 
 const app = express();
@@ -233,6 +233,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
     (findByAlias as any).mockResolvedValue(null);
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 'task-1', title: '/xpto oi' });
+    (extractReminder as any).mockResolvedValue(null);
 
     await webhookPost('/xpto oi');
 
@@ -316,6 +317,7 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
   it('creates task when LLM returns UNKNOWN', async () => {
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'comprar pão' });
+    (extractReminder as any).mockResolvedValue(null);
 
     await webhookPost('comprar pão amanhã');
 
@@ -592,6 +594,7 @@ describe('Webhook — CREATE_EVENT', () => {
     (getToken as any).mockResolvedValue('fake-token');
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'marca alguma coisa' });
+    (extractReminder as any).mockResolvedValue(null);
 
     await webhookPost('marca alguma coisa');
 

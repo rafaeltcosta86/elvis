@@ -69,6 +69,41 @@ function draftPreview(contactName: string, message: string): string {
   return `📋 Vou mandar para *${contactName}*:\n"${message}"\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
 }
 
+async function handleTaskCreation(title: string): Promise<{ text: string; type: 'TASK_CREATED' }> {
+  const newTask = await prisma.task.create({
+    data: { title, category: 'outros' },
+  });
+
+  // Simple heuristic: only call LLM if there's a potential date/time mention
+  const hasTimeIndicator = /\b(amanha|hoje|segunda|terca|quarta|quinta|sexta|sabado|domingo|h|min|as|no|na|proxim[oa]|dia)\b/i.test(
+    title.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  ) || /\d+/.test(title);
+
+  if (hasTimeIndicator) {
+    const reminder = await extractReminder(title, TIMEZONE);
+    if (reminder?.remind_at) {
+      const remindAt = new Date(reminder.remind_at);
+      if (!isNaN(remindAt.getTime())) {
+        await prisma.reminder.create({
+          data: {
+            task_id: newTask.id,
+            remind_at: remindAt,
+            channel: 'whatsapp',
+            status: 'SCHEDULED',
+          },
+        });
+        return { text: TASK_CREATED_MESSAGE, type: 'TASK_CREATED' };
+      }
+    }
+
+    // If it had a time indicator but we couldn't extract a valid reminder,
+    // we still return the standard success message as per AC1/AC2 (exactly ✅ Tarefa criada!)
+    return { text: TASK_CREATED_MESSAGE, type: 'TASK_CREATED' };
+  }
+
+  return { text: TASK_CREATED_MESSAGE, type: 'TASK_CREATED' };
+}
+
 // Resolve relative date strings (e.g. "quinta", "amanhã", "YYYY-MM-DD") to ISO date
 function resolveDate(dateStr: string): string {
   const now = utcToZonedTime(new Date(), TIMEZONE);
@@ -184,7 +219,7 @@ function validateToken(authHeader: string | undefined, secret: string): boolean 
 async function handleIncomingWhatsApp(
   sender_id: string,
   message_text: string
-): Promise<string> {
+): Promise<string | { text: string; type: 'TASK_CREATED' }> {
   const pendingId = await getPending(sender_id);
   const trimmed = message_text.trim();
 
@@ -391,13 +426,13 @@ async function handleIncomingWhatsApp(
       }
 
       case 'ALIAS_SHORTCUT': {
-        responseText = await processSendMessage(
+        const response = await processSendMessage(
           sender_id,
           args?.alias ?? '',
           args?.message ?? '',
           'whatsapp.draft.alias'
         );
-        if (responseText.includes('não encontrado')) {
+        if (response.includes('não encontrado')) {
           // AC4: If message is "desc" and alias not found, it's likely an unknown command help request
           if (args?.message?.toLowerCase() === 'desc') {
             responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
@@ -405,11 +440,9 @@ async function handleIncomingWhatsApp(
           }
 
           // Alias not registered — fallback to task creation
-          await prisma.task.create({
-            data: { title: message_text, category: 'outros' },
-          });
-          responseText = TASK_CREATED_MESSAGE;
+          return handleTaskCreation(message_text);
         }
+        responseText = response;
         break;
       }
 
@@ -722,27 +755,7 @@ async function handleIncomingWhatsApp(
         }
 
         const taskTitle = args?.rawText || 'Sem título';
-        const newTask = await prisma.task.create({
-          data: {
-            title: taskTitle,
-            category: 'outros',
-          },
-        });
-
-        const reminder = await extractReminder(taskTitle, TIMEZONE);
-        if (reminder) {
-          await prisma.reminder.create({
-            data: {
-              task_id: newTask.id,
-              remind_at: new Date(reminder.remind_at),
-              channel: 'whatsapp',
-              status: 'SCHEDULED',
-            },
-          });
-        }
-
-        responseText = TASK_CREATED_MESSAGE;
-        break;
+        return handleTaskCreation(taskTitle);
       }
     }
 
@@ -762,7 +775,8 @@ async function processWebhook(
     const { sender_id, message_text } = req.body;
     if (!sender_id || !message_text) return res.json({ ok: true });
 
-    const responseText = await handleIncomingWhatsApp(sender_id, message_text);
+    const result = await handleIncomingWhatsApp(sender_id, message_text);
+    const responseText = typeof result === 'string' ? result : result.text;
     await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
@@ -841,9 +855,9 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       }
 
       const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
-      const finalResponse = result === TASK_CREATED_MESSAGE
+      const finalResponse = (typeof result !== 'string' && result.type === 'TASK_CREATED')
         ? TASK_CREATED_AUDIO_MESSAGE
-        : `🎙️ Entendi: "${text}"\n\n${result}`;
+        : `🎙️ Entendi: "${text}"\n\n${typeof result === 'string' ? result : result.text}`;
       await sendWhatsApp(sender_id, finalResponse);
     }
 
