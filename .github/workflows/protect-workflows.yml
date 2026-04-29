@@ -1,21 +1,27 @@
-name: Protect Workflows
+name: Protect .github
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/**'
+      - '.github/**'
 
 jobs:
-  block-workflow-changes:
-    name: Bloquear alterações em workflows por agentes
+  block-github-changes:
+    name: Bloquear alterações em .github/ por agentes
     runs-on: ubuntu-latest
     steps:
-      - name: Falhar se PR toca arquivos de workflow
+      - name: Permitir PRs do PM, bloquear agentes
         run: |
-          echo "❌ Este PR modifica arquivos em .github/workflows/"
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          if [ "$AUTHOR" = "rafaeltcosta86" ]; then
+            echo "✅ PR do PM ($AUTHOR) — alteração em .github/ permitida."
+            exit 0
+          fi
+          echo "❌ Este PR modifica arquivos em .github/"
           echo ""
-          echo "Arquivos de workflow são de responsabilidade exclusiva do PM."
-          echo "Agentes de implementação não devem modificar o pipeline PDLC."
+          echo "Autor: $AUTHOR"
+          echo "O diretório .github/ (workflows, CODEOWNERS, etc.) é de responsabilidade"
+          echo "exclusiva do PM. Agentes de implementação não devem modificar essas configs."
           echo ""
-          echo "Se esta alteração é intencional, solicite ao PM que abra um PR separado."
+          echo "Se esta alteração é intencional, o PM deve abrir um PR separado."
           exit 1
