@@ -1,5 +1,4 @@
 export type Intent =
-  | 'CREATE_TASK'
   | 'TODAY'
   | 'DONE'
   | 'POSTPONE'
@@ -11,7 +10,6 @@ export type Intent =
   | 'CONFIRM'
   | 'CANCEL'
   | 'ALIAS_SHORTCUT'
-  | 'CREATE_EVENT'
   | 'LIST_CONTACTS'
   | 'LIST_TASKS'
   | 'DELETE_CONTACT'

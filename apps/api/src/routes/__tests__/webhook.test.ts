@@ -228,7 +228,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
     expect(sentText).toContain('1️⃣');
   });
 
-  it('falls through to CREATE_TASK when alias is not found', async () => {
+  it('falls through to task creation when alias is not found', async () => {
     (findByAlias as any).mockResolvedValue(null);
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 'task-1', title: '/xpto oi' });
