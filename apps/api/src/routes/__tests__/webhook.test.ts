@@ -78,6 +78,7 @@ import {
 } from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
 import { classifyIntent, generateIntroduction } from '../../lib/llmService';
+import { TASK_CREATED_MESSAGE } from '../../lib/constants';
 
 const app = express();
 app.use(express.json());
@@ -237,7 +238,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('✅ Tarefa criada!');
+    expect(sentText).toBe(TASK_CREATED_MESSAGE);
   });
 });
 
@@ -320,7 +321,7 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('✅ Tarefa criada!');
+    expect(sentText).toBe(TASK_CREATED_MESSAGE);
   });
 });
 
@@ -595,7 +596,7 @@ describe('Webhook — CREATE_EVENT', () => {
     await webhookPost('marca alguma coisa');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('✅ Tarefa criada!');
+    expect(sentText).toBe(TASK_CREATED_MESSAGE);
   });
 });
 

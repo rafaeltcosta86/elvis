@@ -30,6 +30,7 @@ import { transcribeAudio } from '../lib/whisperService';
 import multer from 'multer';
 import redis from '../lib/redis';
 import { sanitizeError } from '../lib/logger';
+import { TASK_CREATED_MESSAGE, TASK_CREATED_AUDIO_MESSAGE } from '../lib/constants';
 
 const router = Router();
 const TIMEZONE = 'America/Sao_Paulo';
@@ -407,7 +408,7 @@ async function handleIncomingWhatsApp(
           await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
-          responseText = '✅ Tarefa criada!';
+          responseText = TASK_CREATED_MESSAGE;
         }
         break;
       }
@@ -740,7 +741,7 @@ async function handleIncomingWhatsApp(
           });
         }
 
-        responseText = '✅ Tarefa criada!';
+        responseText = TASK_CREATED_MESSAGE;
         break;
       }
     }
@@ -840,8 +841,8 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       }
 
       const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
-      const finalResponse = result === '✅ Tarefa criada!'
-        ? '🎙️ Tarefa criada!'
+      const finalResponse = result === TASK_CREATED_MESSAGE
+        ? TASK_CREATED_AUDIO_MESSAGE
         : `🎙️ Entendi: "${text}"\n\n${result}`;
       await sendWhatsApp(sender_id, finalResponse);
     }
