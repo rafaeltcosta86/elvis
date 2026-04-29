@@ -764,10 +764,10 @@ async function processWebhook(
     const result = await handleIncomingWhatsApp(sender_id, message_text);
     let finalResponse: string;
 
-    if (typeof result === 'object' && result.type === 'TASK_CREATED') {
+    if (typeof result !== 'string') {
       finalResponse = provider === 'nanoclaw' ? TASK_CREATED_AUDIO_MESSAGE : result.text;
     } else {
-      finalResponse = result as string;
+      finalResponse = result;
     }
 
     await sendWhatsApp(sender_id, finalResponse);
@@ -848,7 +848,7 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       }
 
       const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
-      if (typeof result === 'object' && result.type === 'TASK_CREATED') {
+      if (typeof result !== 'string') {
         await sendWhatsApp(sender_id, TASK_CREATED_AUDIO_MESSAGE);
       } else {
         await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
