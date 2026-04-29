@@ -7,6 +7,9 @@ on:
     types: [submitted]
   issues:
     types: [labeled]
+  workflow_run:
+    workflows: ["QA Agent"]
+    types: [completed]
 
 env:
   PROJECT_ID: PVT_kwHODpFFL84BUuhX
@@ -155,7 +158,7 @@ jobs:
                   owner: repoOwner, repo: repoName, issue_number: issueNumber
                 });
                 await moveItem(issue.node_id);
-                console.log(`Issue #${issueNumber} movida para 🧪 Testes`);
+                console.log(`Issue #${issueNumber} movida para Code Review`);
               } catch (e) {
                 console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }

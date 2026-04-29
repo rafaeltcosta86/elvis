@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { type Task } from '@prisma/client';
-import { parseCommand, COMMAND_REGISTRY } from '../lib/commandParser';
+import { parseCommand } from '../lib/commandParser';
 import { sendWhatsApp } from '../lib/nanoclawClient';
 import prisma from '../lib/prisma';
 import { addDays, nextMonday, nextDay, format, parseISO, setHours, setMinutes } from 'date-fns';
@@ -109,30 +109,12 @@ function deleteContactPreview(name: string, alias: string, phone: string): strin
   return `🗑️ Confirmar deleção?\n\nNome: ${name}\nAlias: ${alias}\nTelefone: ${phone}\n\n1️⃣ Confirmar  |  2️⃣ Cancelar`;
 }
 
-// Parse WHATSAPP_CONTACTS=nome:numero,nome2:numero2
-function parseContacts(raw: string): Array<{ name: string; phone: string }> {
-  return raw
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const [name, phone] = entry.split(':');
-      return { name: (name ?? '').trim(), phone: (phone ?? '').trim() };
-    })
-    .filter((c) => c.name && c.phone);
-}
-
 // Helper para centralizar lógica de envio de mensagem (dry-run/draft)
 async function processSendMessage(sender_id: string, contactIdentifier: string, message: string, auditAction = 'whatsapp.draft') {
-  const dbContact = (await findByName(contactIdentifier)) || (await findByAlias(contactIdentifier));
-  const envContacts = parseContacts(process.env.WHATSAPP_CONTACTS ?? '');
-  const envContact = envContacts.find(
-    (c) => c.name.toLowerCase() === contactIdentifier.toLowerCase()
-  );
-  const contact = dbContact ?? (envContact ? { name: envContact.name, phone: envContact.phone } : null);
+  const contact = (await findByName(contactIdentifier)) || (await findByAlias(contactIdentifier));
 
   if (!contact) {
-    return `❌ "${contactIdentifier}" não encontrado. Cadastre com /criar-contato ou adicione em WHATSAPP_CONTACTS=nome:numero`;
+    return `❌ "${contactIdentifier}" não encontrado. Cadastre com /criar-contato.`;
   }
 
   const comm = await prisma.communication.create({
@@ -187,8 +169,6 @@ async function handleIncomingWhatsApp(
   const pendingId = await getPending(sender_id);
   const trimmed = message_text.trim();
 
-  // If there's a pending confirmation (like SEND_TO or CREATE_EVENT),
-  // and the message is 1 or 2, it should be handled by standard parseCommand (CONFIRM/CANCEL)
   // AC4: confirmation has precedence over snooze.
   if (pendingId && (trimmed === '1' || trimmed === '2')) {
     // Let it fall through to parseCommand and then the switch(intent)
@@ -230,22 +210,6 @@ async function handleIncomingWhatsApp(
   let responseText = '';
 
   switch (intent) {
-      case 'LIST_COMMANDS': {
-        const list = COMMAND_REGISTRY.map((c) => `${c.usage || c.name} — ${c.desc}`).join('\n');
-        responseText = `🗂️ Comandos disponíveis:\n\n${list}\n\n💡 Use /<comando> desc para saber mais sobre qualquer comando.`;
-        break;
-      }
-
-      case 'DESCRIBE_COMMAND': {
-        const cmd = COMMAND_REGISTRY.find((c) => c.name === args?.commandName);
-        if (cmd) {
-          responseText = `${cmd.name} — ${cmd.desc}${cmd.usage ? `\nUso: ${cmd.usage}` : ''}`;
-        } else {
-          responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
-        }
-        break;
-      }
-
       case 'LIST_CONTACTS': {
         const contacts = await listContacts();
         if (contacts.length === 0) {
@@ -397,17 +361,28 @@ async function handleIncomingWhatsApp(
           'whatsapp.draft.alias'
         );
         if (responseText.includes('não encontrado')) {
-          // AC4: If message is "desc" and alias not found, it's likely an unknown command help request
-          if (args?.message?.toLowerCase() === 'desc') {
-            responseText = '❌ Comando não reconhecido. Use /comandos para ver a lista completa.';
-            break;
+          // Alias not registered — fallback to CREATE_TASK logic
+          const taskTitle = message_text;
+          const newTask = await prisma.task.create({
+            data: { title: taskTitle, category: 'outros' },
+          });
+
+          const reminder = await extractReminder(taskTitle, TIMEZONE);
+          if (reminder) {
+            await prisma.reminder.create({
+              data: {
+                task_id: newTask.id,
+                remind_at: new Date(reminder.remind_at),
+                channel: 'whatsapp',
+                status: 'SCHEDULED',
+              },
+            });
           }
 
-          // Alias not registered — fallback to CREATE_TASK logic
-          const newTask = await prisma.task.create({
-            data: { title: message_text, category: 'outros' },
-          });
-          responseText = `✅ Tarefa criada: "${newTask.title}"`;
+          responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
+          if (!reminder) {
+            responseText += `\n\n⚠️ Não consegui identificar data/hora para o lembrete. A tarefa foi criada sem lembrete.`;
+          }
         }
         break;
       }
@@ -588,8 +563,11 @@ async function handleIncomingWhatsApp(
           });
         }
 
-        responseText = `✅ Tarefa criada: "${newTask.title}"`;
+        responseText = `✅ Entendi: Tarefa criada! ID: ${newTask.id.substring(0, 8)}...\n\nPrecisa de data? Use: /adiar ${newTask.id} tomorrow`;
 
+        if (!reminder) {
+          responseText += `\n\n⚠️ Não consegui identificar data/hora para o lembrete. A tarefa foi criada sem lembrete.`;
+        }
         break;
       }
 
@@ -759,7 +737,8 @@ async function handleIncomingWhatsApp(
       }
 
       case 'UNKNOWN': {
-        responseText = '❌ Não entendi. Use /comandos para ver a lista de comandos disponíveis.';
+        responseText =
+          'Não entendi. Comandos:\n/hoje — resumo\n/done <id> — pronto\n/adiar <id> tomorrow — adiar\n/semana — semana\n/email — e-mails\nmanda para <nome>: <msg>';
         break;
       }
     }
@@ -781,10 +760,7 @@ async function processWebhook(
     if (!sender_id || !message_text) return res.json({ ok: true });
 
     const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
-      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
-      : responseText;
-    await sendWhatsApp(sender_id, finalResponse);
+    await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
     console.error(`Webhook ${provider} error:`, sanitizeError(err));
