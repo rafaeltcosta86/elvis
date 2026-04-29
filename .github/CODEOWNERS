@@ -1,0 +1,4 @@
+# Todo o diretório .github/ requer aprovação explícita do PM.
+# Isso inclui workflows, CODEOWNERS e demais configurações de automação.
+# Agentes de implementação nunca devem modificar esses arquivos.
+.github/ @rafaeltcosta86
