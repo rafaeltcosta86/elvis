@@ -404,10 +404,10 @@ async function handleIncomingWhatsApp(
           }
 
           // Alias not registered — fallback to task creation
-          const newTask = await prisma.task.create({
+          await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
-          responseText = `✅ Tarefa criada: "${newTask.title}"`;
+          responseText = '✅ Tarefa criada!';
         }
         break;
       }
@@ -740,7 +740,7 @@ async function handleIncomingWhatsApp(
           });
         }
 
-        responseText = `✅ Tarefa criada: "${newTask.title}"`;
+        responseText = '✅ Tarefa criada!';
         break;
       }
     }
@@ -762,10 +762,7 @@ async function processWebhook(
     if (!sender_id || !message_text) return res.json({ ok: true });
 
     const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
-      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
-      : responseText;
-    await sendWhatsApp(sender_id, finalResponse);
+    await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
     console.error(`Webhook ${provider} error:`, sanitizeError(err));
@@ -843,7 +840,10 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       }
 
       const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
-      await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
+      const finalResponse = result === '✅ Tarefa criada!'
+        ? '🎙️ Tarefa criada!'
+        : `🎙️ Entendi: "${text}"\n\n${result}`;
+      await sendWhatsApp(sender_id, finalResponse);
     }
 
     res.json({ ok: true });
