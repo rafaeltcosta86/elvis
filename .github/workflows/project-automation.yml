@@ -138,14 +138,14 @@ jobs:
                 projectId: process.env.PROJECT_ID,
                 itemId,
                 fieldId: process.env.STATUS_FIELD_ID,
-                value: { singleSelectOptionId: process.env.STATUS_CODE_REVIEW }
+                value: { singleSelectOptionId: process.env.STATUS_TESTES }
               });
             };
 
             // Sempre tentar mover o PR (caso esteja no board sem issue linkada)
             if (linkedIssues.length === 0) {
               await moveItem(pr.node_id).catch(() => {});
-              console.log(`PR #${prNumber} adicionado ao board em Code Review`);
+              console.log(`PR #${prNumber} adicionado ao board em Testes`);
             }
 
             // Mover issues linkadas (independentemente de o PR estar no board)

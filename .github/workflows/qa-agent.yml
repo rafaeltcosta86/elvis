@@ -107,7 +107,10 @@ jobs:
           ## Output dos testes (vitest --reporter=verbose):
           ${TEST_OUTPUT}
 
-          Para cada AC (linhas que começam com \"- [ ]\" ou \"- [x]\"), identifique:
+          Os ACs podem estar em dois formatos — reconheça ambos:
+          - Checkbox: linhas que começam com \"- [ ]\" ou \"- [x]\"
+          - Negrito numerado: linhas que começam com \"**AC\" (ex: \"**AC1 —\", \"**AC2 —\")
+          Para cada AC encontrado, identifique:
           1. Há um teste que passou e que cobre este comportamento?
           2. O nome/descrição do teste confirma a cobertura?
 
