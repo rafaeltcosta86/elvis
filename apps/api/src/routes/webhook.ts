@@ -403,193 +403,12 @@ async function handleIncomingWhatsApp(
             break;
           }
 
-          // Alias not registered — fallback to CREATE_TASK logic
+          // Alias not registered — fallback to task creation
           const newTask = await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
           responseText = `✅ Tarefa criada: "${newTask.title}"`;
         }
-        break;
-      }
-
-      case 'CREATE_EVENT': {
-        const calendarToken = await getToken();
-        if (!calendarToken) {
-          responseText = '❌ Calendário não configurado. Execute o OAuth bootstrap no servidor para habilitar agendamento via áudio.';
-          break;
-        }
-        const eventClassification = await classifyIntent(args?.rawText ?? '');
-        if (eventClassification.intent === 'CREATE_EVENT') {
-          const startISO = buildEventStartISO(eventClassification.date, eventClassification.time);
-          const comm = await prisma.communication.create({
-            data: {
-              provider: 'WHATSAPP',
-              type: 'DRAFT',
-              to: null,
-              body: null,
-              status: 'AWAITING_APPROVAL',
-              metadata: {
-                kind: 'CREATE_EVENT',
-                title: eventClassification.title,
-                start: startISO,
-                duration_min: eventClassification.duration_min,
-                sender_id,
-              },
-            },
-          });
-          await savePending(sender_id, comm.id);
-          responseText = eventPreview(eventClassification.title, startISO, eventClassification.duration_min);
-        } else {
-          responseText = `❌ Não entendi o evento. Tente: "marca reunião com João quinta às 15h"`;
-        }
-        break;
-      }
-
-      case 'CREATE_TASK': {
-        // Try LLM classification before creating a task
-        const classification = await classifyIntent(args?.rawText ?? '');
-
-        if (classification.intent === 'REGISTER_ALIAS') {
-          try {
-            await addAlias(classification.contact_name, classification.alias);
-            responseText = `✅ Registrado! Agora *${classification.alias}* = ${classification.contact_name}.`;
-          } catch {
-            responseText = `❌ Contato "${classification.contact_name}" não encontrado. Cadastre-o primeiro.`;
-          }
-          break;
-        }
-
-        if (classification.intent === 'CREATE_CONTACT') {
-          const alias = '/' + classification.contact_name.toLowerCase().replace(/\s+/g, '');
-          try {
-            await createContact(classification.contact_name, classification.phone, [alias], classification.owner_alias);
-            responseText = `✅ Contato *${classification.contact_name}* criado! Use ${alias} <msg> para mandar mensagem.`;
-          } catch {
-            responseText = `❌ Não consegui criar o contato. Verifique se o nome já existe.`;
-          }
-          break;
-        }
-
-        if (classification.intent === 'SET_OWNER_ALIAS') {
-          try {
-            await setOwnerAlias(classification.contact_name, classification.owner_alias);
-            responseText = `✅ Pronto! Agora nas mensagens para *${classification.contact_name}* você é *${classification.owner_alias}*.`;
-          } catch {
-            responseText = `❌ Contato "${classification.contact_name}" não encontrado.`;
-          }
-          break;
-        }
-
-        if (classification.intent === 'EDIT_CONTACT') {
-          try {
-            const updated = await updateContact(
-              classification.contact_name,
-              classification.field,
-              classification.new_value
-            );
-            responseText = `✅ Contato atualizado: ${updated.name}`;
-          } catch (err: any) {
-            if (err.code === 'P2002') {
-              responseText = `❌ Erro: Já existe um contato com esse nome ou alias.`;
-            } else {
-              responseText = `❌ Não encontrei nenhum contato com esse nome. Verifique com /contatos.`;
-            }
-          }
-          break;
-        }
-
-        if (classification.intent === 'DELETE_CONTACT') {
-          const identifier = classification.contact_identifier;
-          const contact = identifier.startsWith('/')
-            ? await findByAlias(identifier)
-            : await findByName(identifier);
-
-          if (!contact) {
-            responseText = `❌ Não encontrei nenhum contato com esse nome ou alias. Verifique com /contatos.`;
-            break;
-          }
-
-          const alias = contact.aliases[0] || '';
-          const formattedAlias = alias.startsWith('/') ? alias : `/${alias}`;
-
-          const comm = await prisma.communication.create({
-            data: {
-              provider: 'WHATSAPP',
-              type: 'DRAFT',
-              to: null,
-              body: null,
-              status: 'AWAITING_APPROVAL',
-              metadata: {
-                kind: 'DELETE_CONTACT',
-                contactId: contact.id,
-                contactName: contact.name,
-                sender_id,
-              },
-            },
-          });
-          await savePending(sender_id, comm.id);
-          responseText = deleteContactPreview(contact.name, formattedAlias, contact.phone);
-          break;
-        }
-
-        if (classification.intent === 'INTRODUCE_SELF') {
-          const contact = (await findByName(classification.contact_name)) || (await findByAlias(classification.contact_name));
-
-          if (!contact) {
-            responseText = `❌ Contato "${classification.contact_name}" não encontrado.`;
-            break;
-          }
-
-          const ownerAlias = contact.owner_alias || process.env.OWNER_NAME || 'Rafael';
-          const generatedMessage = await generateIntroduction(contact.name, classification.context, ownerAlias);
-
-          const comm = await prisma.communication.create({
-            data: {
-              provider: 'WHATSAPP',
-              type: 'DRAFT',
-              to: contact.phone,
-              body: generatedMessage,
-              status: 'AWAITING_APPROVAL',
-              metadata: { contactName: contact.name, sender_id },
-            },
-          });
-          await savePending(sender_id, comm.id);
-          responseText = `Entendi: Apresentação para ${contact.name}\n\n${draftPreview(contact.name, generatedMessage)}`;
-          break;
-        }
-
-        if (classification.intent === 'SEND_MESSAGE') {
-          responseText = await processSendMessage(
-            sender_id,
-            classification.contact_name,
-            classification.message,
-            'whatsapp.draft.llm'
-          );
-          break;
-        }
-
-        const taskTitle = args?.rawText || 'Sem título';
-        const newTask = await prisma.task.create({
-          data: {
-            title: taskTitle,
-            category: 'outros',
-          },
-        });
-
-        const reminder = await extractReminder(taskTitle, TIMEZONE);
-        if (reminder) {
-          await prisma.reminder.create({
-            data: {
-              task_id: newTask.id,
-              remind_at: new Date(reminder.remind_at),
-              channel: 'whatsapp',
-              status: 'SCHEDULED',
-            },
-          });
-        }
-
-        responseText = `✅ Tarefa criada: "${newTask.title}"`;
-
         break;
       }
 
@@ -619,14 +438,6 @@ async function handleIncomingWhatsApp(
         break;
       }
 
-      case 'SEND_TO': {
-        responseText = await processSendMessage(
-          sender_id,
-          args?.contactName ?? '',
-          args?.message ?? ''
-        );
-        break;
-      }
 
       case 'CONFIRM': {
         const commId = args?.communication_id ?? await getPending(sender_id);
@@ -759,7 +570,177 @@ async function handleIncomingWhatsApp(
       }
 
       case 'UNKNOWN': {
-        responseText = '❌ Não entendi. Use /comandos para ver a lista de comandos disponíveis.';
+        // Try LLM classification for any unknown command or plain text
+        const classification = await classifyIntent(args?.rawText ?? '');
+
+        if (classification.intent === 'REGISTER_ALIAS') {
+          try {
+            await addAlias(classification.contact_name, classification.alias);
+            responseText = `✅ Registrado! Agora *${classification.alias}* = ${classification.contact_name}.`;
+          } catch {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado. Cadastre-o primeiro.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'CREATE_CONTACT') {
+          const alias = '/' + classification.contact_name.toLowerCase().replace(/\s+/g, '');
+          try {
+            await createContact(classification.contact_name, classification.phone, [alias], classification.owner_alias);
+            responseText = `✅ Contato *${classification.contact_name}* criado! Use ${alias} <msg> para mandar mensagem.`;
+          } catch {
+            responseText = `❌ Não consegui criar o contato. Verifique se o nome já existe.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'SET_OWNER_ALIAS') {
+          try {
+            await setOwnerAlias(classification.contact_name, classification.owner_alias);
+            responseText = `✅ Pronto! Agora nas mensagens para *${classification.contact_name}* você é *${classification.owner_alias}*.`;
+          } catch {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado.`;
+          }
+          break;
+        }
+
+        if (classification.intent === 'EDIT_CONTACT') {
+          try {
+            const updated = await updateContact(
+              classification.contact_name,
+              classification.field,
+              classification.new_value
+            );
+            responseText = `✅ Contato atualizado: ${updated.name}`;
+          } catch (err: any) {
+            if (err.code === 'P2002') {
+              responseText = `❌ Erro: Já existe um contato com esse nome ou alias.`;
+            } else {
+              responseText = `❌ Não encontrei nenhum contato com esse nome. Verifique com /contatos.`;
+            }
+          }
+          break;
+        }
+
+        if (classification.intent === 'DELETE_CONTACT') {
+          const identifier = classification.contact_identifier;
+          const contact = identifier.startsWith('/')
+            ? await findByAlias(identifier)
+            : await findByName(identifier);
+
+          if (!contact) {
+            responseText = `❌ Não encontrei nenhum contato com esse nome ou alias. Verifique com /contatos.`;
+            break;
+          }
+
+          const alias = contact.aliases[0] || '';
+          const formattedAlias = alias.startsWith('/') ? alias : `/${alias}`;
+
+          const comm = await prisma.communication.create({
+            data: {
+              provider: 'WHATSAPP',
+              type: 'DRAFT',
+              to: null,
+              body: null,
+              status: 'AWAITING_APPROVAL',
+              metadata: {
+                kind: 'DELETE_CONTACT',
+                contactId: contact.id,
+                contactName: contact.name,
+                sender_id,
+              },
+            },
+          });
+          await savePending(sender_id, comm.id);
+          responseText = deleteContactPreview(contact.name, formattedAlias, contact.phone);
+          break;
+        }
+
+        if (classification.intent === 'INTRODUCE_SELF') {
+          const contact = (await findByName(classification.contact_name)) || (await findByAlias(classification.contact_name));
+
+          if (!contact) {
+            responseText = `❌ Contato "${classification.contact_name}" não encontrado.`;
+            break;
+          }
+
+          const ownerAlias = contact.owner_alias || process.env.OWNER_NAME || 'Rafael';
+          const generatedMessage = await generateIntroduction(contact.name, classification.context, ownerAlias);
+
+          const comm = await prisma.communication.create({
+            data: {
+              provider: 'WHATSAPP',
+              type: 'DRAFT',
+              to: contact.phone,
+              body: generatedMessage,
+              status: 'AWAITING_APPROVAL',
+              metadata: { contactName: contact.name, sender_id },
+            },
+          });
+          await savePending(sender_id, comm.id);
+          responseText = `Entendi: Apresentação para ${contact.name}\n\n${draftPreview(contact.name, generatedMessage)}`;
+          break;
+        }
+
+        if (classification.intent === 'SEND_MESSAGE') {
+          responseText = await processSendMessage(
+            sender_id,
+            classification.contact_name,
+            classification.message,
+            'whatsapp.draft.llm'
+          );
+          break;
+        }
+
+        if (classification.intent === 'CREATE_EVENT') {
+          const calendarToken = await getToken();
+          if (!calendarToken) {
+            responseText = '❌ Calendário não configurado. Execute o OAuth bootstrap no servidor para habilitar agendamento.';
+            break;
+          }
+          const startISO = buildEventStartISO(classification.date, classification.time);
+          const comm = await prisma.communication.create({
+            data: {
+              provider: 'WHATSAPP',
+              type: 'DRAFT',
+              to: null,
+              body: null,
+              status: 'AWAITING_APPROVAL',
+              metadata: {
+                kind: 'CREATE_EVENT',
+                title: classification.title,
+                start: startISO,
+                duration_min: classification.duration_min,
+                sender_id,
+              },
+            },
+          });
+          await savePending(sender_id, comm.id);
+          responseText = eventPreview(classification.title, startISO, classification.duration_min);
+          break;
+        }
+
+        const taskTitle = args?.rawText || 'Sem título';
+        const newTask = await prisma.task.create({
+          data: {
+            title: taskTitle,
+            category: 'outros',
+          },
+        });
+
+        const reminder = await extractReminder(taskTitle, TIMEZONE);
+        if (reminder) {
+          await prisma.reminder.create({
+            data: {
+              task_id: newTask.id,
+              remind_at: new Date(reminder.remind_at),
+              channel: 'whatsapp',
+              status: 'SCHEDULED',
+            },
+          });
+        }
+
+        responseText = `✅ Tarefa criada: "${newTask.title}"`;
         break;
       }
     }
@@ -848,10 +829,12 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       const normalized = await normalizeAudioCommand(text);
       let finalNormalized = normalized;
 
-      // Passo 2: se for SEND_TO, buscar owner_alias específico do contato
-      const parsed = parseCommand(normalized);
-      if (parsed.intent === 'SEND_TO' && parsed.args?.contactName) {
-        const contact = await findByName(parsed.args.contactName);
+      // Passo 2: detectar se é um comando de envio para buscar owner_alias específico do contato
+      // O formato esperado do normalizeAudioCommand é "manda para <nome>: <mensagem>"
+      const audioSendMatch = /^manda para (.*?):/i.exec(normalized);
+      if (audioSendMatch) {
+        const contactName = audioSendMatch[1].trim();
+        const contact = await findByName(contactName);
         const contactAlias = contact?.owner_alias;
         const defaultAlias = process.env.OWNER_NAME ?? 'Rafael';
         if (contactAlias && contactAlias !== defaultAlias) {

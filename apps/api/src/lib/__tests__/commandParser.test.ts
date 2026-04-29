@@ -137,80 +137,35 @@ describe('parseCommand', () => {
     });
   });
 
-  describe('SEND_TO', () => {
-    it('estrutura clássica: manda para <nome>: <msg>', () => {
-      expect(parseCommand('manda para amanda: oi')).toEqual({
-        intent: 'SEND_TO',
-        args: { contactName: 'amanda', message: 'oi' },
-      });
-    });
-
-    it('linguagem natural de áudio: manda <msg> pra <nome>', () => {
-      expect(parseCommand('Manda um oi pra Amanda.')).toEqual({
-        intent: 'SEND_TO',
-        args: { contactName: 'Amanda', message: 'um oi' },
-      });
-    });
-
-    it('linguagem natural: manda um abraço para João', () => {
-      expect(parseCommand('manda um abraço para João')).toEqual({
-        intent: 'SEND_TO',
-        args: { contactName: 'João', message: 'um abraço' },
-      });
-    });
-
-  });
-
-  describe('CREATE_TASK', () => {
-    it('returns CREATE_TASK intent with rawText for plain text', () => {
+  describe('UNKNOWN (natural language fallback)', () => {
+    it('returns UNKNOWN intent with rawText for plain text', () => {
       expect(parseCommand('comprar leite')).toEqual({
-        intent: 'CREATE_TASK',
+        intent: 'UNKNOWN',
         args: { rawText: 'comprar leite' },
       });
     });
 
     it('trims whitespace from rawText', () => {
       expect(parseCommand('  comprar leite  ')).toEqual({
-        intent: 'CREATE_TASK',
+        intent: 'UNKNOWN',
         args: { rawText: 'comprar leite' },
       });
     });
 
-    it('returns CREATE_TASK with empty rawText for empty string', () => {
+    it('returns UNKNOWN with empty rawText for empty string', () => {
       expect(parseCommand('')).toEqual({
-        intent: 'CREATE_TASK',
+        intent: 'UNKNOWN',
         args: { rawText: '' },
       });
     });
-  });
 
-  describe('CREATE_EVENT', () => {
-    it('detects "marca" prefix', () => {
-      expect(parseCommand('marca uma reunião com a Linic quinta às 15h')).toEqual({
-        intent: 'CREATE_EVENT',
-        args: { rawText: 'marca uma reunião com a Linic quinta às 15h' },
-      });
+    it('returns UNKNOWN for previous SEND_TO patterns', () => {
+      expect(parseCommand('manda para amanda: oi').intent).toBe('UNKNOWN');
+      expect(parseCommand('Manda um oi pra Amanda.').intent).toBe('UNKNOWN');
     });
 
-    it('detects "agenda" prefix', () => {
-      expect(parseCommand('agenda call com João amanhã às 10h')).toEqual({
-        intent: 'CREATE_EVENT',
-        args: { rawText: 'agenda call com João amanhã às 10h' },
-      });
-    });
-
-    it('detects "criar reunião" prefix', () => {
-      expect(parseCommand('criar uma reunião de time sexta')).toEqual({
-        intent: 'CREATE_EVENT',
-        args: { rawText: 'criar uma reunião de time sexta' },
-      });
-    });
-
-    it('detects "marcar" (with r)', () => {
-      expect(parseCommand('marcar dentista amanhã 9h')).toEqual({
-        intent: 'CREATE_EVENT',
-        args: { rawText: 'marcar dentista amanhã 9h' },
-      });
+    it('returns UNKNOWN for previous CREATE_EVENT patterns', () => {
+      expect(parseCommand('marca reunião').intent).toBe('UNKNOWN');
     });
   });
 });

@@ -108,9 +108,15 @@ describe('POST /webhook/baileys-audio', () => {
     expect(sentText).toContain('✅ Tarefa criada: "lembra de ligar pra Linic amanhã"');
   });
 
-  it('áudio próprio (is_forwarded=false): SEND_TO cria draft e mostra preview com confirm/cancel', async () => {
+  it('áudio próprio (is_forwarded=false): SEND_MESSAGE cria draft e mostra preview com confirm/cancel', async () => {
     process.env.WHATSAPP_CONTACTS = 'amanda:5541999990001';
-    vi.mocked(transcribeAudio).mockResolvedValueOnce('manda para amanda: oi');
+    vi.mocked(transcribeAudio).mockResolvedValueOnce('manda um oi para amanda');
+    // normalizeAudioCommand is mocked to return input text by default in this file
+    vi.mocked(classifyIntent).mockResolvedValueOnce({
+      intent: 'SEND_MESSAGE',
+      contact_name: 'amanda',
+      message: 'oi'
+    });
     (prisma.communication.create as any).mockResolvedValueOnce({ id: 'comm-audio-001', status: 'AWAITING_APPROVAL' });
     (prisma.auditLog.create as any).mockResolvedValueOnce({});
 
@@ -126,7 +132,8 @@ describe('POST /webhook/baileys-audio', () => {
       })
     );
     const sentText: string = vi.mocked(sendWhatsApp).mock.calls[0][1];
-    expect(sentText).toContain('manda para amanda: oi');
+    expect(sentText).toContain('amanda');
+    expect(sentText).toContain('oi');
     expect(sentText).toContain('1️⃣');
   });
 

@@ -1,5 +1,4 @@
 export type Intent =
-  | 'CREATE_TASK'
   | 'TODAY'
   | 'DONE'
   | 'POSTPONE'
@@ -8,11 +7,9 @@ export type Intent =
   | 'MORE_PROACTIVE'
   | 'LESS_PROACTIVE'
   | 'RESET_PREFS'
-  | 'SEND_TO'
   | 'CONFIRM'
   | 'CANCEL'
   | 'ALIAS_SHORTCUT'
-  | 'CREATE_EVENT'
   | 'LIST_CONTACTS'
   | 'LIST_TASKS'
   | 'DELETE_CONTACT'
@@ -156,42 +153,6 @@ export function parseCommand(text: string): ParsedCommand {
     };
   }
 
-  // Linguagem natural: "marca/agenda/cria reunião/evento/call..."
-  const createEventMatch = /^(?:marca(?:r)?|agenda(?:r)?|cria(?:r)?\s+(?:uma?\s+)?(?:reunião|evento|call|compromisso|meet))\b/i.test(trimmed);
-  if (createEventMatch) {
-    return {
-      intent: 'CREATE_EVENT',
-      args: { rawText: trimmed },
-    };
-  }
-
-  // Linguagem natural de áudio: "manda <msg> pra/para/pro <nome>[.]"
-  // ex: "Manda um oi pra Amanda." / "manda um abraço para João"
-  const sendToNaturalMatch = /^(?:manda(?:r)?|pergunta(?:r)?|fala(?:r)?|diz(?:er)?|avisa(?:r)?)\s+(.+?)\s+(?:pra|para|pro)\s+([^\s,.:]+)[.,]?$/i.exec(trimmed);
-  if (sendToNaturalMatch) {
-    return {
-      intent: 'SEND_TO',
-      args: {
-        contactName: sendToNaturalMatch[2].trim(),
-        message: sendToNaturalMatch[1].trim(),
-      },
-    };
-  }
-
-  // manda para <nome>: <msg> | fala com <nome> que <msg> | avisa <nome>: <msg>
-  const sendToMatch = /^(?:manda(?:r)?\s+(?:(?:uma?\s+)?mensagem\s+)?(?:para|pro|pra)|fala(?:r)?\s+(?:com|pra)|pergunta(?:r)?\s+(?:para|pro|pra)|avisa(?:r)?|diz(?:er)?\s+(?:para|pro|pra))\s+(?:o\s|a\s|os\s|as\s)?(.+?)(?::|,|\s+(que|dizendo|se|perguntando)\s+)\s*(.+)$/i.exec(trimmed);
-  if (sendToMatch) {
-    const connector = sendToMatch[2];
-    const message = sendToMatch[3].trim();
-    return {
-      intent: 'SEND_TO',
-      args: {
-        contactName: sendToMatch[1].trim(),
-        message: connector && ![':', ','].includes(connector) ? `${connector} ${message}` : message,
-      },
-    };
-  }
-
   // /alias <mensagem> — atalho de contato (ex: /linic olá)
   const aliasMatch = /^(\/\S+)\s+(.+)$/i.exec(trimmed);
   if (aliasMatch) {
@@ -201,9 +162,9 @@ export function parseCommand(text: string): ParsedCommand {
     };
   }
 
-  // Anything else is CREATE_TASK
+  // Anything else is UNKNOWN
   return {
-    intent: 'CREATE_TASK',
+    intent: 'UNKNOWN',
     args: { rawText: trimmed },
   };
 }

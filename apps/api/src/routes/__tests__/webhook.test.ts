@@ -228,7 +228,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
     expect(sentText).toContain('1️⃣');
   });
 
-  it('falls through to CREATE_TASK when alias is not found', async () => {
+  it('falls through to task creation when alias is not found', async () => {
     (findByAlias as any).mockResolvedValue(null);
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 'task-1', title: '/xpto oi' });
@@ -324,7 +324,7 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
   });
 });
 
-describe('Webhook — SEND_TO (approval gate)', () => {
+describe('Webhook — SEND_MESSAGE (via LLM UNKNOWN path)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
@@ -337,8 +337,14 @@ describe('Webhook — SEND_TO (approval gate)', () => {
     (prisma.auditLog.create as any).mockResolvedValue({});
   });
 
-  it('does NOT send WhatsApp immediately when SEND_TO is triggered', async () => {
-    await webhookPost('manda para assistente: olá tudo bem');
+  it('does NOT send WhatsApp immediately when SEND_MESSAGE is triggered', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'SEND_MESSAGE',
+      contact_name: 'assistente',
+      message: 'olá tudo bem',
+    });
+
+    await webhookPost('manda um oi para assistente');
 
     // sendWhatsApp must only be called once — to reply to the owner (preview), not to the contact
     const calls = (sendWhatsApp as any).mock.calls;
@@ -346,8 +352,14 @@ describe('Webhook — SEND_TO (approval gate)', () => {
     expect(sentToContact).toBe(false);
   });
 
-  it('creates a Communication record with AWAITING_APPROVAL when SEND_TO is triggered', async () => {
-    await webhookPost('manda para assistente: olá tudo bem');
+  it('creates a Communication record with AWAITING_APPROVAL when SEND_MESSAGE is detected', async () => {
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'SEND_MESSAGE',
+      contact_name: 'assistente',
+      message: 'olá tudo bem',
+    });
+
+    await webhookPost('manda um oi para assistente');
 
     expect(prisma.communication.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -362,7 +374,13 @@ describe('Webhook — SEND_TO (approval gate)', () => {
   });
 
   it('replies to owner with a preview and confirmation instructions', async () => {
-    await webhookPost('manda para assistente: olá tudo bem');
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'SEND_MESSAGE',
+      contact_name: 'assistente',
+      message: 'olá tudo bem',
+    });
+
+    await webhookPost('manda um oi para assistente');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('assistente');
@@ -372,7 +390,13 @@ describe('Webhook — SEND_TO (approval gate)', () => {
   });
 
   it('replies with error if contact is not found', async () => {
-    await webhookPost('manda para desconhecido: oi');
+    (classifyIntent as any).mockResolvedValue({
+      intent: 'SEND_MESSAGE',
+      contact_name: 'desconhecido',
+      message: 'oi',
+    });
+
+    await webhookPost('manda oi para o desconhecido');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
     expect(sentText).toContain('não encontrado');
@@ -563,14 +587,15 @@ describe('Webhook — CREATE_EVENT', () => {
     expect(sentText).toContain('1️⃣');
   });
 
-  it('retorna erro de parse quando LLM não detecta CREATE_EVENT', async () => {
+  it('cria tarefa (fallback) quando LLM não detecta CREATE_EVENT', async () => {
     (getToken as any).mockResolvedValue('fake-token');
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+    (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'marca alguma coisa' });
 
     await webhookPost('marca alguma coisa');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('❌');
+    expect(sentText).toContain('✅ Tarefa criada: "marca alguma coisa"');
   });
 });
 
