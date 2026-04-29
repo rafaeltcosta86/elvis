@@ -77,7 +77,8 @@ import {
   updateContact,
 } from '../../lib/contactService';
 // findByName is mocked to return null by default (env var contacts used instead)
-import { classifyIntent, generateIntroduction } from '../../lib/llmService';
+import { classifyIntent, generateIntroduction, extractReminder } from '../../lib/llmService';
+import { TASK_CREATED_MESSAGE } from '../../lib/constants';
 
 const app = express();
 app.use(express.json());
@@ -232,12 +233,13 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
     (findByAlias as any).mockResolvedValue(null);
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 'task-1', title: '/xpto oi' });
+    (extractReminder as any).mockResolvedValue(null);
 
     await webhookPost('/xpto oi');
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "/xpto oi"\n\n✅ Tarefa criada: "/xpto oi"');
+    expect(sentText).toBe(TASK_CREATED_MESSAGE);
   });
 });
 
@@ -315,12 +317,13 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
   it('creates task when LLM returns UNKNOWN', async () => {
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'comprar pão' });
+    (extractReminder as any).mockResolvedValue(null);
 
     await webhookPost('comprar pão amanhã');
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "comprar pão amanhã"\n\n✅ Tarefa criada: "comprar pão"');
+    expect(sentText).toBe(TASK_CREATED_MESSAGE);
   });
 });
 
@@ -591,11 +594,12 @@ describe('Webhook — CREATE_EVENT', () => {
     (getToken as any).mockResolvedValue('fake-token');
     (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
     (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'marca alguma coisa' });
+    (extractReminder as any).mockResolvedValue(null);
 
     await webhookPost('marca alguma coisa');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('✅ Tarefa criada: "marca alguma coisa"');
+    expect(sentText).toBe(TASK_CREATED_MESSAGE);
   });
 });
 

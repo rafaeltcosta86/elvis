@@ -43,6 +43,7 @@ import { classifyIntent, suggestAction } from '../../lib/llmService';
 import { sendWhatsApp } from '../../lib/nanoclawClient';
 import prisma from '../../lib/prisma';
 import redis from '../../lib/redis';
+import { TASK_CREATED_AUDIO_MESSAGE } from '../../lib/constants';
 
 const app = express();
 app.use(express.json());
@@ -104,8 +105,7 @@ describe('POST /webhook/baileys-audio', () => {
     expect(res.status).toBe(200);
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = vi.mocked(sendWhatsApp).mock.calls[0][1];
-    expect(sentText).toContain('🎙️ Entendi: "lembra de ligar pra Linic amanhã"');
-    expect(sentText).toContain('✅ Tarefa criada: "lembra de ligar pra Linic amanhã"');
+    expect(sentText).toBe(TASK_CREATED_AUDIO_MESSAGE);
   });
 
   it('áudio próprio (is_forwarded=false): SEND_MESSAGE cria draft e mostra preview com confirm/cancel', async () => {
