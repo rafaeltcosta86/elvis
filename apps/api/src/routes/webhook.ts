@@ -122,6 +122,42 @@ function parseContacts(raw: string): Array<{ name: string; phone: string }> {
     .filter((c) => c.name && c.phone);
 }
 
+async function handleTaskCreation(title: string): Promise<{ text: string; type: 'TASK_CREATED' }> {
+  const newTask = await prisma.task.create({
+    data: { title, category: 'outros' },
+  });
+
+  // Simple heuristic: only call LLM if there's a potential date/time mention
+  const hasTimeIndicator = /\b(amanha|hoje|segunda|terca|quarta|quinta|sexta|sabado|domingo|h|min|as|no|na|proxim[oa]|dia)\b/i.test(
+    title.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  ) || /\d+/.test(title);
+
+  if (hasTimeIndicator) {
+    const reminder = await extractReminder(title, TIMEZONE);
+    if (reminder?.remind_at) {
+      const remindAt = new Date(reminder.remind_at);
+      if (!isNaN(remindAt.getTime())) {
+        await prisma.reminder.create({
+          data: {
+            task_id: newTask.id,
+            remind_at: remindAt,
+            channel: 'whatsapp',
+            status: 'SCHEDULED',
+          },
+        });
+        return { text: '✅ Tarefa criada!', type: 'TASK_CREATED' };
+      }
+    }
+
+    return {
+      text: '✅ Tarefa criada!\n\n⚠️ Não consegui identificar data/hora para o lembrete. A tarefa foi criada sem lembrete.',
+      type: 'TASK_CREATED',
+    };
+  }
+
+  return { text: '✅ Tarefa criada!', type: 'TASK_CREATED' };
+}
+
 // Helper para centralizar lógica de envio de mensagem (dry-run/draft)
 async function processSendMessage(sender_id: string, contactIdentifier: string, message: string, auditAction = 'whatsapp.draft') {
   const dbContact = (await findByName(contactIdentifier)) || (await findByAlias(contactIdentifier));
@@ -183,7 +219,7 @@ function validateToken(authHeader: string | undefined, secret: string): boolean 
 async function handleIncomingWhatsApp(
   sender_id: string,
   message_text: string
-): Promise<string> {
+): Promise<string | { text: string; type: string }> {
   const pendingId = await getPending(sender_id);
   const trimmed = message_text.trim();
 
@@ -404,10 +440,7 @@ async function handleIncomingWhatsApp(
           }
 
           // Alias not registered — fallback to task creation
-          const newTask = await prisma.task.create({
-            data: { title: message_text, category: 'outros' },
-          });
-          responseText = `✅ Tarefa criada: "${newTask.title}"`;
+          return handleTaskCreation(message_text);
         }
         break;
       }
@@ -721,27 +754,7 @@ async function handleIncomingWhatsApp(
         }
 
         const taskTitle = args?.rawText || 'Sem título';
-        const newTask = await prisma.task.create({
-          data: {
-            title: taskTitle,
-            category: 'outros',
-          },
-        });
-
-        const reminder = await extractReminder(taskTitle, TIMEZONE);
-        if (reminder) {
-          await prisma.reminder.create({
-            data: {
-              task_id: newTask.id,
-              remind_at: new Date(reminder.remind_at),
-              channel: 'whatsapp',
-              status: 'SCHEDULED',
-            },
-          });
-        }
-
-        responseText = `✅ Tarefa criada: "${newTask.title}"`;
-        break;
+        return handleTaskCreation(taskTitle);
       }
     }
 
@@ -761,11 +774,9 @@ async function processWebhook(
     const { sender_id, message_text } = req.body;
     if (!sender_id || !message_text) return res.json({ ok: true });
 
-    const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
-      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
-      : responseText;
-    await sendWhatsApp(sender_id, finalResponse);
+    const response = await handleIncomingWhatsApp(sender_id, message_text);
+    const responseText = typeof response === 'string' ? response : response.text;
+    await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
     console.error(`Webhook ${provider} error:`, sanitizeError(err));
@@ -843,7 +854,12 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       }
 
       const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
-      await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
+      const isTask = typeof result !== 'string' && result.type === 'TASK_CREATED';
+      const resultText = typeof result === 'string' ? result : result.text;
+      const audioResponse = isTask
+        ? resultText
+        : `🎙️ Entendi: "${text}"\n\n${resultText}`;
+      await sendWhatsApp(sender_id, audioResponse);
     }
 
     res.json({ ok: true });
