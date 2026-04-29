@@ -27,6 +27,13 @@ jobs:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
             const body = context.payload.comment.body.toLowerCase().trim();
+            const rawBody = context.payload.comment.body.trim();
+
+            // Comentários com headers markdown ou muito longos são análises do agente, não aprovações do PM
+            if (rawBody.includes('##') || rawBody.length > 500) {
+              console.log('Comentário com headers markdown ou muito longo — análise do agente. Ignorando.');
+              return;
+            }
 
             // Aprovação explícita ou seleção implícita de opção
             const approved = /\b(aprovado|approved|ok|lgtm|pode detalhar)\b/.test(body)

@@ -262,6 +262,10 @@ Antes de iniciar qualquer implementação (feature, bugfix, refactor, docs):
 
 Só commitar direto em `main` se o usuário **explicitamente** pedir.
 
+### O que NÃO fazer
+
+- **Nunca modificar arquivos em `.github/workflows/`** — esses arquivos definem o pipeline PDLC (automação de board, QA Agent, Sentinel) e são de responsabilidade exclusiva do agente upstream (Claude Code). Alterações acidentais nos workflows quebram a automação de board, QA e deploys. Se uma feature precisar de mudança no workflow, sinalizar explicitamente ao usuário.
+
 ---
 
 ## Definition of Done — obrigatório para toda feature
