@@ -84,8 +84,21 @@ app.use(express.json());
 app.use('/', webhookRouter);
 
 const WEBHOOK_SECRET = 'test-secret';
+const BAILEYS_SECRET = 'baileys-secret';
 
 function webhookPost(messageText: string) {
+  return request(app)
+    .post('/webhook/baileys')
+    .set('Authorization', `Bearer ${BAILEYS_SECRET}`)
+    .send({
+      sender_id: '551199999999',
+      message_text: messageText,
+      message_id: 'msg-001',
+      timestamp: 1700000000,
+    });
+}
+
+function nanoclawPost(messageText: string) {
   return request(app)
     .post('/webhook/nanoclaw')
     .set('Authorization', `Bearer ${WEBHOOK_SECRET}`)
@@ -103,6 +116,7 @@ describe('Webhook — LIST_CONTACTS', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.WEBHOOK_SECRET = WEBHOOK_SECRET;
+    process.env.BAILEYS_WEBHOOK_SECRET = BAILEYS_SECRET;
     (sendWhatsApp as any).mockResolvedValue(undefined);
     (findByName as any).mockResolvedValue(null);
     (findByAlias as any).mockResolvedValue(null);
@@ -237,7 +251,7 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "/xpto oi"\n\n✅ Tarefa criada: "/xpto oi"');
+    expect(sentText).toBe('✅ Tarefa criada!');
   });
 });
 
@@ -320,7 +334,7 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "comprar pão amanhã"\n\n✅ Tarefa criada: "comprar pão"');
+    expect(sentText).toBe('✅ Tarefa criada!');
   });
 });
 
@@ -595,7 +609,18 @@ describe('Webhook — CREATE_EVENT', () => {
     await webhookPost('marca alguma coisa');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('✅ Tarefa criada: "marca alguma coisa"');
+    expect(sentText).toBe('✅ Tarefa criada!');
+  });
+
+  it('cria tarefa (fallback) e retorna microfone quando provider é nanoclaw', async () => {
+    (getToken as any).mockResolvedValue('fake-token');
+    (classifyIntent as any).mockResolvedValue({ intent: 'UNKNOWN' });
+    (prisma.task.create as any).mockResolvedValue({ id: 't1', title: 'marca alguma coisa' });
+
+    await nanoclawPost('marca alguma coisa');
+
+    const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
+    expect(sentText).toBe('🎙️ Tarefa criada!');
   });
 });
 
