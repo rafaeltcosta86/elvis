@@ -122,6 +122,27 @@ function parseContacts(raw: string): Array<{ name: string; phone: string }> {
     .filter((c) => c.name && c.phone);
 }
 
+async function handleTaskCreation(title: string): Promise<string> {
+  const newTask = await prisma.task.create({
+    data: { title, category: 'outros' },
+  });
+
+  const reminder = await extractReminder(title, TIMEZONE);
+  if (reminder) {
+    await prisma.reminder.create({
+      data: {
+        task_id: newTask.id,
+        remind_at: new Date(reminder.remind_at),
+        channel: 'whatsapp',
+        status: 'SCHEDULED',
+      },
+    });
+    return '✅ Tarefa criada!';
+  }
+
+  return '✅ Tarefa criada!\n\n⚠️ Não consegui identificar data/hora para o lembrete. A tarefa foi criada sem lembrete.';
+}
+
 // Helper para centralizar lógica de envio de mensagem (dry-run/draft)
 async function processSendMessage(sender_id: string, contactIdentifier: string, message: string, auditAction = 'whatsapp.draft') {
   const dbContact = (await findByName(contactIdentifier)) || (await findByAlias(contactIdentifier));
@@ -404,10 +425,7 @@ async function handleIncomingWhatsApp(
           }
 
           // Alias not registered — fallback to task creation
-          const newTask = await prisma.task.create({
-            data: { title: message_text, category: 'outros' },
-          });
-          responseText = `✅ Tarefa criada: "${newTask.title}"`;
+          responseText = await handleTaskCreation(message_text);
         }
         break;
       }
@@ -721,26 +739,7 @@ async function handleIncomingWhatsApp(
         }
 
         const taskTitle = args?.rawText || 'Sem título';
-        const newTask = await prisma.task.create({
-          data: {
-            title: taskTitle,
-            category: 'outros',
-          },
-        });
-
-        const reminder = await extractReminder(taskTitle, TIMEZONE);
-        if (reminder) {
-          await prisma.reminder.create({
-            data: {
-              task_id: newTask.id,
-              remind_at: new Date(reminder.remind_at),
-              channel: 'whatsapp',
-              status: 'SCHEDULED',
-            },
-          });
-        }
-
-        responseText = `✅ Tarefa criada: "${newTask.title}"`;
+        responseText = await handleTaskCreation(taskTitle);
         break;
       }
     }
@@ -762,10 +761,7 @@ async function processWebhook(
     if (!sender_id || !message_text) return res.json({ ok: true });
 
     const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
-      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
-      : responseText;
-    await sendWhatsApp(sender_id, finalResponse);
+    await sendWhatsApp(sender_id, responseText);
     res.json({ ok: true });
   } catch (err) {
     console.error(`Webhook ${provider} error:`, sanitizeError(err));
@@ -843,7 +839,10 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       }
 
       const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
-      await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
+      const audioResponse = result.startsWith('✅ Tarefa criada')
+        ? result
+        : `🎙️ Entendi: "${text}"\n\n${result}`;
+      await sendWhatsApp(sender_id, audioResponse);
     }
 
     res.json({ ok: true });

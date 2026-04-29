@@ -237,7 +237,8 @@ describe('Webhook — ALIAS_SHORTCUT', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "/xpto oi"\n\n✅ Tarefa criada: "/xpto oi"');
+    expect(sentText).toContain('✅ Tarefa criada');
+    expect(sentText).not.toContain('Entendi:');
   });
 });
 
@@ -320,7 +321,8 @@ describe('Webhook — REGISTER_ALIAS (LLM semântico)', () => {
 
     expect(prisma.task.create).toHaveBeenCalled();
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toBe('🎙️ Entendi: "comprar pão amanhã"\n\n✅ Tarefa criada: "comprar pão"');
+    expect(sentText).toContain('✅ Tarefa criada');
+    expect(sentText).not.toContain('Entendi:');
   });
 });
 
@@ -595,7 +597,8 @@ describe('Webhook — CREATE_EVENT', () => {
     await webhookPost('marca alguma coisa');
 
     const sentText: string = (sendWhatsApp as any).mock.calls[0][1];
-    expect(sentText).toContain('✅ Tarefa criada: "marca alguma coisa"');
+    expect(sentText).toContain('✅ Tarefa criada');
+    expect(sentText).not.toContain('Entendi:');
   });
 });
 
