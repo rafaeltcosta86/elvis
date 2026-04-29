@@ -1,0 +1,21 @@
+name: Protect Workflows
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+jobs:
+  block-workflow-changes:
+    name: Bloquear alterações em workflows por agentes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Falhar se PR toca arquivos de workflow
+        run: |
+          echo "❌ Este PR modifica arquivos em .github/workflows/"
+          echo ""
+          echo "Arquivos de workflow são de responsabilidade exclusiva do PM."
+          echo "Agentes de implementação não devem modificar o pipeline PDLC."
+          echo ""
+          echo "Se esta alteração é intencional, solicite ao PM que abra um PR separado."
+          exit 1

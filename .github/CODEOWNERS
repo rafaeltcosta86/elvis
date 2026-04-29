@@ -1,0 +1,3 @@
+# Arquivos de workflow requerem aprovação explícita do PM.
+# Agentes de implementação (Jules, etc.) nunca devem modificar esses arquivos.
+.github/workflows/ @rafaeltcosta86
