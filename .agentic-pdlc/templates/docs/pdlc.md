@@ -78,8 +78,9 @@ REPO         = {{REPO_OWNER}}/{{REPO_NAME}}
 ## Approval Gates
 
 **Gate 1 — PM/Ideation (Brainstorming):**
-You comment on the issue approving one of the approaches proposed by the ideation agent.
-Format: *"Approved — proceed with option X."*
+You manually add the `stage:detailing` label to the issue after reviewing the approaches proposed by the ideation agent.
+Via UI: GitHub issue sidebar → Labels → `stage:detailing`.
+Via CLI: `gh issue edit <N> --add-label stage:detailing`
 
 **Gate 2 — Tech Lead (Spec):**
 You add the `spec:approved` label to the issue after reviewing the technical spec in the body.
