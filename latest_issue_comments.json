@@ -3998,5 +3998,50 @@
       "eyes": 1
     },
     "performed_via_github_app": null
+  },
+  {
+    "url": "https://api.github.com/repos/rafaeltcosta86/elvis/issues/comments/4364127492",
+    "html_url": "https://github.com/rafaeltcosta86/elvis/pull/105#issuecomment-4364127492",
+    "issue_url": "https://api.github.com/repos/rafaeltcosta86/elvis/issues/105",
+    "id": 4364127492,
+    "node_id": "IC_kwDORr7-M88AAAABBB9NBA",
+    "user": {
+      "login": "rafaeltcosta86",
+      "id": 244401455,
+      "node_id": "U_kgDODpFFLw",
+      "avatar_url": "https://avatars.githubusercontent.com/u/244401455?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/rafaeltcosta86",
+      "html_url": "https://github.com/rafaeltcosta86",
+      "followers_url": "https://api.github.com/users/rafaeltcosta86/followers",
+      "following_url": "https://api.github.com/users/rafaeltcosta86/following{/other_user}",
+      "gists_url": "https://api.github.com/users/rafaeltcosta86/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/rafaeltcosta86/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/rafaeltcosta86/subscriptions",
+      "organizations_url": "https://api.github.com/users/rafaeltcosta86/orgs",
+      "repos_url": "https://api.github.com/users/rafaeltcosta86/repos",
+      "events_url": "https://api.github.com/users/rafaeltcosta86/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/rafaeltcosta86/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "created_at": "2026-05-02T15:24:33Z",
+    "updated_at": "2026-05-02T15:24:33Z",
+    "body": "❌ **QA Agent — Necessita correção** — ACs sem cobertura\n\n\n\n**Resumo:** Erro ao chamar Gemini API — verifique o secret GEMINI_API_KEY.\n\n---\n*QA Agent — verificação automática de ACs. Issue: #104*",
+    "author_association": "OWNER",
+    "reactions": {
+      "url": "https://api.github.com/repos/rafaeltcosta86/elvis/issues/comments/4364127492/reactions",
+      "total_count": 1,
+      "+1": 0,
+      "-1": 0,
+      "laugh": 0,
+      "hooray": 0,
+      "confused": 0,
+      "heart": 0,
+      "rocket": 0,
+      "eyes": 1
+    },
+    "performed_via_github_app": null
   }
 ]
