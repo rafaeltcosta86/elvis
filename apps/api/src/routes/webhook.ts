@@ -851,7 +851,7 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       if (typeof result !== 'string') {
         await sendWhatsApp(sender_id, TASK_CREATED_AUDIO_MESSAGE);
       } else {
-        await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
+        await sendWhatsApp(sender_id, '🎙️ Entendi: "' + text + '"\n\n' + result);
       }
     }
 
