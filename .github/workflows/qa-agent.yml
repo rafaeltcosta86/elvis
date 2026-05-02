@@ -87,9 +87,19 @@ jobs:
           PR_NUMBER: ${{ steps.context.outputs.pr_number }}
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
           REPO: ${{ steps.context.outputs.repo }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
           CI: "true"
         run: |
           echo "Verificando ACs da issue #${ISSUE_NUMBER} para o PR #${PR_NUMBER}..."
+
+          # Deduplicação: pular se já postamos comentário para este commit
+          SHA_SHORT="${SHA:0:7}"
+          EXISTING=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments \
+            --jq "[.comments[] | select(.body | contains(\"$SHA_SHORT\"))] | length" 2>/dev/null || echo "0")
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "Comentário já postado para commit $SHA_SHORT. Pulando execução duplicada."
+            exit 0
+          fi
 
           ISSUE_BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body --jq '.body')
 
@@ -123,7 +133,44 @@ jobs:
 
           if [ -z "$RESULT" ]; then
             echo "Erro ao chamar Gemini API. Resposta: $RESPONSE"
-            RESULT='{"result":"needs-work","acs":[],"summary":"Erro ao chamar Gemini API — verifique o secret GEMINI_API_KEY."}'
+
+            # Adicionar label infra:qa-broken na PR
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "infra:qa-broken" 2>/dev/null || true
+
+            # Comentar na PR sem adicionar qa:needs-work (não aciona Jules)
+            INFRA_COMMENT="⚠️ **QA Agent — Erro de infraestrutura**"
+            INFRA_COMMENT+=$'\n\nO QA Agent não conseguiu executar porque a chamada à Gemini API falhou.'
+            INFRA_COMMENT+=$'\n\n**Ação necessária (PM):** Verificar secret `GEMINI_API_KEY` em Settings → Secrets → Actions.'
+            INFRA_COMMENT+=$'\n\nEste erro não indica problema no código do PR. Nenhuma correção de código necessária.'
+            INFRA_COMMENT+=$'\n\n*QA Agent — infra error — commit: '"${SHA_SHORT}"' — Issue: #'"${ISSUE_NUMBER}"'*'
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$INFRA_COMMENT"
+
+            # Criar issue de infra se não existir (problema não se perde com o PR)
+            EXISTING_ISSUE=$(gh issue list --repo "$REPO" \
+              --label "infra:qa-broken" --state open \
+              --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+            if [ -z "$EXISTING_ISSUE" ]; then
+              ISSUE_BODY="## Problema"
+              ISSUE_BODY+=$'\n\nO QA Agent falhou ao chamar a Gemini API em múltiplas execuções.'
+              ISSUE_BODY+=$'\n\n**Erro:** `Erro ao chamar Gemini API — verifique o secret GEMINI_API_KEY`'
+              ISSUE_BODY+=$'\n\n## Impacto'
+              ISSUE_BODY+=$'\n\n- PRs ficam presas na coluna Testes sem avaliação de ACs'
+              ISSUE_BODY+=$'\n- Jules entra em loop tentando corrigir código que não tem problema'
+              ISSUE_BODY+=$'\n\n## Ação'
+              ISSUE_BODY+=$'\n\nVerificar e restaurar o secret `GEMINI_API_KEY` em:'
+              ISSUE_BODY+=$'\n> Settings → Secrets and variables → Actions'
+              ISSUE_BODY+=$'\n\n## Contexto'
+              ISSUE_BODY+=$'\n\nDetectado automaticamente pelo QA Agent no PR #'"${PR_NUMBER}"' (commit '"${SHA_SHORT}"').'
+              gh issue create --repo "$REPO" \
+                --title "⚠️ Infra: GEMINI_API_KEY ausente ou inválido — QA Agent inoperante" \
+                --label "infra:qa-broken" \
+                --body "$ISSUE_BODY" 2>/dev/null || true
+              echo "Issue de infra criada."
+            else
+              echo "Issue de infra já existe (#${EXISTING_ISSUE}). Pulando criação."
+            fi
+
+            exit 0
           fi
 
           QA_RESULT=$(echo "$RESULT" | jq -r '.result // "needs-work"')
@@ -135,13 +182,13 @@ jobs:
             exit 0
           else
             HEADER="❌ **QA Agent — Necessita correção** — ACs sem cobertura"
-            COMMENT=$(echo "$RESULT" | jq -r --arg h "$HEADER" --arg issue "$ISSUE_NUMBER" '
+            COMMENT=$(echo "$RESULT" | jq -r --arg h "$HEADER" --arg issue "$ISSUE_NUMBER" --arg sha "$SHA_SHORT" '
               $h + "\n\n" +
               (.acs | map(
                 (if .covered then "- ✅ " else "- ❌ " end) + .text + "\n  > " + .reason
               ) | join("\n")) +
               "\n\n**Resumo:** " + .summary +
-              "\n\n---\n*QA Agent — verificação automática de ACs. Issue: #" + $issue + "*"
+              "\n\n---\n*QA Agent — commit: " + $sha + " — Issue: #" + $issue + "*"
             ' 2>/dev/null || printf '%s\n\n**Resumo:** Erro ao formatar relatório.\n' "$HEADER")
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT"
             gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "qa:needs-work" 2>/dev/null || true

@@ -156,6 +156,19 @@ jobs:
                 });
                 await moveItem(issue.node_id);
                 console.log(`Issue #${issueNumber} movida para 🧪 Testes`);
+
+                // Swap de label: stage:desenvolvimento → stage:testes
+                // jules mantido — ainda pode ser necessário se testes falharem
+                await github.rest.issues.addLabels({
+                  owner: repoOwner, repo: repoName,
+                  issue_number: issueNumber,
+                  labels: ['stage:testes']
+                }).catch(() => {});
+                await github.rest.issues.removeLabel({
+                  owner: repoOwner, repo: repoName,
+                  issue_number: issueNumber,
+                  name: 'stage:desenvolvimento'
+                }).catch(() => {});
               } catch (e) {
                 console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
@@ -234,6 +247,15 @@ jobs:
               } catch (e) {
                 console.log(`Aviso: não foi possível mover issue #${issueNumber}: ${e.message}`);
               }
+            }
+
+            // Remover label jules das issues linkadas (dev concluído com sucesso)
+            for (const issueNumber of linkedIssues) {
+              await github.rest.issues.removeLabel({
+                owner: repoOwner, repo: repoName,
+                issue_number: issueNumber,
+                name: 'jules'
+              }).catch(() => {});
             }
 
             // Adicionar label stage:revisao
