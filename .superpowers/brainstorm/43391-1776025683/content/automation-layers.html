@@ -1,0 +1,63 @@
+<h2>Como os cards se movem "magicamente"</h2>
+<p class="subtitle">Duas camadas de automação — uma é grátis e nativa, a outra exige uma skill no Claude Code</p>
+
+<div class="section">
+  <h3 style="color:#4ade80">✅ Camada 1 — GitHub nativo (zero config extra)</h3>
+  <p>O GitHub Projects já detecta eventos do repositório automaticamente:</p>
+  <div style="margin:16px 0;font-family:monospace;font-size:13px;line-height:2">
+    <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(74,222,128,0.08);border-radius:6px;margin-bottom:6px">
+      <span style="color:#4ade80">►</span>
+      <span>PR aberto</span>
+      <span style="color:#888">→</span>
+      <span style="background:#1e3a5f;padding:2px 8px;border-radius:4px">em-desenvolvimento → pull-request</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(74,222,128,0.08);border-radius:6px;margin-bottom:6px">
+      <span style="color:#4ade80">►</span>
+      <span>PR merged</span>
+      <span style="color:#888">→</span>
+      <span style="background:#1e3a5f;padding:2px 8px;border-radius:4px">pull-request → producao</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(74,222,128,0.08);border-radius:6px;margin-bottom:6px">
+      <span style="color:#4ade80">►</span>
+      <span>CI passa / falha</span>
+      <span style="color:#888">→</span>
+      <span style="background:#1e3a5f;padding:2px 8px;border-radius:4px">label no card visível no board</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(74,222,128,0.08);border-radius:6px">
+      <span style="color:#4ade80">►</span>
+      <span>Issue fechada</span>
+      <span style="color:#888">→</span>
+      <span style="background:#1e3a5f;padding:2px 8px;border-radius:4px">→ Done</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3 style="color:#facc15">⚡ Camada 2 — Claude Code move os cards (requer skill/hook)</h3>
+  <p>Para mover upstream (backlog → ideação → definição técnica → em-desenvolvimento), o Claude precisa chamar a API do GitHub Projects. Isso é configurável via <strong>skill ou hook</strong> no Claude Code:</p>
+  <div style="margin:16px 0;font-family:monospace;font-size:13px;line-height:2">
+    <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(250,204,21,0.08);border-radius:6px;margin-bottom:6px">
+      <span style="color:#facc15">►</span>
+      <span>Claude começa a trabalhar na feature</span>
+      <span style="color:#888">→</span>
+      <span style="background:#3a2e00;padding:2px 8px;border-radius:4px">backlog → em-desenvolvimento</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(250,204,21,0.08);border-radius:6px;margin-bottom:6px">
+      <span style="color:#facc15">►</span>
+      <span>Claude cria o PR</span>
+      <span style="color:#888">→</span>
+      <span style="background:#3a2e00;padding:2px 8px;border-radius:4px">→ code-review (automático via GitHub)</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(250,204,21,0.08);border-radius:6px">
+      <span style="color:#facc15">►</span>
+      <span>Você aprova o PR</span>
+      <span style="color:#888">→</span>
+      <span style="background:#3a2e00;padding:2px 8px;border-radius:4px">→ producao (automático via GitHub)</span>
+    </div>
+  </div>
+</div>
+
+<div style="padding:16px;background:rgba(255,255,255,0.05);border-radius:8px;margin-top:8px">
+  <p class="label">Resumo prático</p>
+  <p>Com <strong>configuração mínima</strong> (GitHub Workflows + uma skill no Claude Code), você abre o Projects e vê os cards se movendo enquanto o agente trabalha. A parte "verde" é nativa — PR aberto e merged move sozinho. A parte "amarela" exige um hook que o Claude chama ao iniciar/concluir cada etapa.</p>
+</div>
