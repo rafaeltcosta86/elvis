@@ -27,6 +27,7 @@ import {
 } from '../lib/llmService';
 import { getToken } from '../lib/oauthService';
 import { transcribeAudio } from '../lib/whisperService';
+import { TASK_CREATED_MESSAGE, TASK_CREATED_AUDIO_MESSAGE } from '../lib/constants';
 import multer from 'multer';
 import redis from '../lib/redis';
 import { sanitizeError } from '../lib/logger';
@@ -183,7 +184,7 @@ function validateToken(authHeader: string | undefined, secret: string): boolean 
 async function handleIncomingWhatsApp(
   sender_id: string,
   message_text: string
-): Promise<string> {
+): Promise<string | { text: string; type: 'TASK_CREATED' }> {
   const pendingId = await getPending(sender_id);
   const trimmed = message_text.trim();
 
@@ -404,10 +405,10 @@ async function handleIncomingWhatsApp(
           }
 
           // Alias not registered — fallback to task creation
-          const newTask = await prisma.task.create({
+          await prisma.task.create({
             data: { title: message_text, category: 'outros' },
           });
-          responseText = `✅ Tarefa criada: "${newTask.title}"`;
+          return { text: TASK_CREATED_MESSAGE, type: 'TASK_CREATED' };
         }
         break;
       }
@@ -740,8 +741,7 @@ async function handleIncomingWhatsApp(
           });
         }
 
-        responseText = `✅ Tarefa criada: "${newTask.title}"`;
-        break;
+        return { text: TASK_CREATED_MESSAGE, type: 'TASK_CREATED' };
       }
     }
 
@@ -761,10 +761,15 @@ async function processWebhook(
     const { sender_id, message_text } = req.body;
     if (!sender_id || !message_text) return res.json({ ok: true });
 
-    const responseText = await handleIncomingWhatsApp(sender_id, message_text);
-    const finalResponse = responseText.startsWith('✅ Tarefa criada:')
-      ? `🎙️ Entendi: "${message_text}"\n\n${responseText}`
-      : responseText;
+    const result = await handleIncomingWhatsApp(sender_id, message_text);
+    let finalResponse: string;
+
+    if (typeof result !== 'string') {
+      finalResponse = provider === 'nanoclaw' ? TASK_CREATED_AUDIO_MESSAGE : result.text;
+    } else {
+      finalResponse = result;
+    }
+
     await sendWhatsApp(sender_id, finalResponse);
     res.json({ ok: true });
   } catch (err) {
@@ -843,7 +848,11 @@ router.post('/webhook/baileys-audio', upload.single('audio'), async (req, res) =
       }
 
       const result = await handleIncomingWhatsApp(sender_id, finalNormalized);
-      await sendWhatsApp(sender_id, `🎙️ Entendi: "${text}"\n\n${result}`);
+      if (typeof result !== 'string') {
+        await sendWhatsApp(sender_id, TASK_CREATED_AUDIO_MESSAGE);
+      } else {
+        await sendWhatsApp(sender_id, '🎙️ Entendi: "' + text + '"\n\n' + result);
+      }
     }
 
     res.json({ ok: true });
